@@ -15,7 +15,7 @@ const state = {
   tableWidthPercent: 55,
   aModuleSizes: {
     table: { width: null, height: null, scale: 1 },
-    comment: { width: null, height: null, scale: 1 }
+    comment: { width: null, height: null, scale: 1, fitContent: false }
   },
   tableBg: true,
   profileSize: 'normal',
@@ -86,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupACommentComponent();
   setupTableResizer();
   setupAModuleResizers();
+  setupACommentFitControl();
   setupModuleSizeReset();
   setupTableFitToggle();
   setupTableBgControl();
@@ -205,6 +206,7 @@ function applyLayout(mode) {
   if (resizer) {
     resizer.style.display = (isA && state.showAComment && state.orientation === 'H') ? 'flex' : 'none';
   }
+  if (isA) window.requestAnimationFrame(applyACommentContentFit);
 }
 
 // 3. 가로/세로 방향 전환
@@ -520,7 +522,7 @@ function setupTableResizer() {
   });
 }
 
-// A 타입 모듈은 모서리 핸들로 조절하며, 내용도 함께 비율 축소한다.
+// A 타입 모듈은 버튼으로 크기 조절을 활성화한 뒤 모서리 핸들로 조절한다.
 function setupAModuleResizers() {
   const container = document.getElementById('a-container');
   if (!container) return;
@@ -531,6 +533,25 @@ function setupAModuleResizers() {
     const handle = module.querySelector('.a-module-resize-handle');
     const limits = A_MODULE_SIZE_LIMITS[key];
     if (!handle) return;
+
+    const toggle = module.querySelector('.btn-module-resize');
+    toggle?.addEventListener('mousedown', (e) => e.stopPropagation());
+    toggle?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const enabled = !module.classList.contains('resize-enabled');
+      container.querySelectorAll('.inner-module.resize-enabled').forEach(other => {
+        other.classList.remove('resize-enabled');
+        const otherToggle = other.querySelector('.btn-module-resize');
+        if (otherToggle) {
+          otherToggle.setAttribute('aria-pressed', 'false');
+          otherToggle.textContent = '↘ 크기 조절';
+        }
+      });
+      module.classList.toggle('resize-enabled', enabled);
+      toggle.setAttribute('aria-pressed', String(enabled));
+      toggle.textContent = enabled ? '✓ 조절 완료' : '↘ 크기 조절';
+    });
 
     handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -560,6 +581,7 @@ function setupAModuleResizers() {
         module.style.flex = 'none';
         module.style.alignSelf = 'flex-start';
         applyAModuleContentScale(module, nextScale);
+        if (key === 'comment') applyACommentContentFit();
       };
       const onMouseUp = () => {
         module.classList.remove('is-resizing');
@@ -570,6 +592,48 @@ function setupAModuleResizers() {
       window.addEventListener('mouseup', onMouseUp);
     });
   });
+}
+
+function setupACommentFitControl() {
+  const button = document.getElementById('btn-fit-a-comment');
+  if (!button) return;
+
+  button.addEventListener('mousedown', (e) => e.stopPropagation());
+  button.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const commentSize = state.aModuleSizes.comment;
+    commentSize.fitContent = !commentSize.fitContent;
+    applyACommentContentFit();
+  });
+  applyACommentContentFit();
+}
+
+// 자유 입력 카드와 텍스트 영역이 조절된 모듈의 내부 높이를 채우도록 맞춘다.
+function applyACommentContentFit() {
+  const module = document.getElementById('mod-comment');
+  const button = document.getElementById('btn-fit-a-comment');
+  const content = module?.querySelector('.a-module-content-scale');
+  if (!module || !content || !button) return;
+
+  const enabled = Boolean(state.aModuleSizes.comment.fitContent);
+  module.classList.toggle('is-content-fitted', enabled);
+  button.setAttribute('aria-pressed', String(enabled));
+  button.textContent = enabled ? '✓ 입력창 맞춤' : '↕ 입력창 맞춤';
+
+  if (!enabled) {
+    content.style.height = '';
+    return;
+  }
+
+  const scale = Number.isFinite(state.aModuleSizes.comment.scale)
+    ? state.aModuleSizes.comment.scale
+    : 1;
+  const dragBarHeight = module.querySelector('.module-drag-bar')?.offsetHeight ?? 0;
+  if (module.clientHeight === 0) return;
+  const verticalPadding = 24;
+  const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding);
+  content.style.height = `${Math.round(availableHeight / Math.max(scale, 0.1))}px`;
 }
 
 function applyAModuleContentScale(module, scale = 1) {
@@ -586,7 +650,12 @@ function setupModuleSizeReset() {
   button.addEventListener('click', () => {
     state.aModuleSizes = {
       table: { width: null, height: null, scale: 1 },
-      comment: { width: null, height: null, scale: 1 }
+      comment: {
+        width: null,
+        height: null,
+        scale: 1,
+        fitContent: state.aModuleSizes.comment.fitContent
+      }
     };
     ['mod-table', 'mod-comment'].forEach(id => {
       const module = document.getElementById(id);
@@ -598,6 +667,7 @@ function setupModuleSizeReset() {
       applyAModuleContentScale(module, 1);
     });
     applyOrientation(state.orientation);
+    applyACommentContentFit();
   });
 }
 
@@ -619,6 +689,7 @@ function applyAModuleSizes() {
     }
     applyAModuleContentScale(module, Number.isFinite(size.scale) ? size.scale : 1);
   });
+  applyACommentContentFit();
 }
 
 function setupTableFitToggle() {
@@ -660,6 +731,7 @@ function setupACommentToggle() {
       state.showAComment = e.target.checked;
       box.style.display = state.showAComment ? '' : 'none';
       if (resizer) resizer.style.display = (state.layout === 'A' && state.showAComment && state.orientation === 'H') ? 'flex' : 'none';
+      if (state.showAComment) window.requestAnimationFrame(applyACommentContentFit);
     });
   }
 }
@@ -1409,7 +1481,8 @@ function setupShareCode() {
           state.aModuleSizes[key] = {
             width: Number.isFinite(size.width) ? size.width : null,
             height: Number.isFinite(size.height) ? size.height : null,
-            scale: Number.isFinite(size.scale) ? size.scale : 1
+            scale: Number.isFinite(size.scale) ? size.scale : 1,
+            ...(key === 'comment' ? { fitContent: Boolean(size.fitContent) } : {})
           };
         });
         applyAModuleSizes();

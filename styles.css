@@ -501,6 +501,37 @@ body.is-horizontal .toolbar-row {
   color: var(--accent);
   border-color: var(--accent);
 }
+.module-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 5px;
+}
+.btn-module-resize,
+.btn-module-fit {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--subtext);
+  padding: 3px 7px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-module-resize {
+  margin-left: 5px;
+}
+.module-action-buttons .btn-module-resize {
+  margin-left: 0;
+}
+.btn-module-resize:hover,
+.btn-module-fit:hover,
+.btn-module-resize[aria-pressed="true"],
+.btn-module-fit[aria-pressed="true"] {
+  color: #0b0f19;
+  background: var(--accent);
+  border-color: var(--accent);
+}
 
 /* =========================================
    개별 질문/입력 카드 모듈화 및 깨짐 방지
@@ -1000,9 +1031,9 @@ body.is-horizontal .toolbar-row {
 }
 .a-module-resize-handle {
   position: absolute;
-  /* 모듈 모서리와 겹치지 않도록 바깥쪽에 별도 배치한다. */
-  right: -26px;
-  bottom: -26px;
+  /* 모서리와 가깝게 두되, 내용과는 겹치지 않게 살짝 바깥에 둔다. */
+  right: -9px;
+  bottom: -9px;
   width: 18px;
   height: 18px;
   border: 2px solid #fff;
@@ -1014,7 +1045,7 @@ body.is-horizontal .toolbar-row {
   pointer-events: auto;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.42);
 }
-.inner-module:hover .a-module-resize-handle,
+.inner-module.resize-enabled .a-module-resize-handle,
 .inner-module.is-resizing .a-module-resize-handle {
   display: block;
 }
@@ -1274,6 +1305,32 @@ body.is-horizontal .toolbar-row {
   overflow: visible;
 }
 
+/* "입력창 맞춤"을 켜면 남는 모듈 높이를 카드와 입력 필드에 배분한다. */
+.layout-a-comment-wrap.is-content-fitted .a-module-content-scale {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.layout-a-comment-wrap.is-content-fitted .a-comment-list {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.layout-a-comment-wrap.is-content-fitted .qa-card-item {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.layout-a-comment-wrap.is-content-fitted .qa-body {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.layout-a-comment-wrap.is-content-fitted .qa-body textarea {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  resize: none;
+}
+
 .a-comment-list {
   display: flex !important;
   flex-direction: column !important;
@@ -1487,6 +1544,8 @@ body.is-horizontal .action-footer {
 .card-canvas.exporting .btn-add-table-row,
 .card-canvas.exporting #btn-add-a-comment,
 .card-canvas.exporting .module-drag-bar,
+.card-canvas.exporting .btn-module-resize,
+.card-canvas.exporting .btn-module-fit,
 .card-canvas.exporting .profile-toolbar,
 .card-canvas.exporting .table-hover-toolbar,
 .card-canvas.exporting .btn-del-meta,

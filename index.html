@@ -140,6 +140,7 @@
           <div class="layout-a-table-wrap inner-module has-bg" id="mod-table">
             <div class="module-drag-bar" title="드래그하여 코멘트창과 좌우/상하 변경">
               <span class="drag-handle-icon">⠿ 표 위치 변경</span>
+              <button type="button" class="btn-module-resize" aria-pressed="false" title="모서리 핸들을 표시해 크기를 조절합니다">↘ 크기 조절</button>
             </div>
 
             <!-- 체크리스트 배경 토글 호버 툴바 -->
@@ -174,6 +175,10 @@
           <div class="layout-a-comment-wrap inner-module" id="mod-comment">
             <div class="module-drag-bar" title="드래그하여 표와 좌우/상하 변경">
               <span class="drag-handle-icon">⠿ 자유 입력창 위치 변경</span>
+              <div class="module-action-buttons">
+                <button type="button" id="btn-fit-a-comment" class="btn-module-fit" aria-pressed="false" title="모듈 높이에 맞춰 내부 입력창을 자동으로 조절합니다">↕ 입력창 맞춤</button>
+                <button type="button" class="btn-module-resize" aria-pressed="false" title="모서리 핸들을 표시해 크기를 조절합니다">↘ 크기 조절</button>
+              </div>
             </div>
             <div class="a-module-content-scale">
               <div id="a-comment-container" class="a-comment-list"></div>

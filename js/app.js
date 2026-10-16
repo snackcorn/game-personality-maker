@@ -14,8 +14,8 @@ const state = {
   tableFitFill: false,
   tableWidthPercent: 55,
   aModuleSizes: {
-    table: { width: null, height: null, scale: 1 },
-    comment: { width: null, height: null, scale: 1, fitContent: false }
+    table: { width: null, height: null, scale: 1, baseWidth: null, baseHeight: null },
+    comment: { width: null, height: null, scale: 1, baseWidth: null, baseHeight: null, fitContent: false }
   },
   tableBg: true,
   profileSize: 'normal',
@@ -561,7 +561,11 @@ function setupAModuleResizers() {
       const startY = e.clientY;
       const startRect = module.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
-      const startScale = state.aModuleSizes[key].scale ?? 1;
+      const moduleSize = state.aModuleSizes[key];
+      // 최초 조절 시의 크기를 기준점으로 보관한다. 누적 비율 대신 기준점으로
+      // 계산해야 축소 후 다시 확대했을 때 내용 크기도 원래대로 돌아온다.
+      if (!Number.isFinite(moduleSize.baseWidth)) moduleSize.baseWidth = startRect.width;
+      if (!Number.isFinite(moduleSize.baseHeight)) moduleSize.baseHeight = startRect.height;
       const isHorizontal = state.orientation === 'H';
 
       const onMouseMove = (moveEvt) => {
@@ -569,7 +573,11 @@ function setupAModuleResizers() {
           ? startRect.width
           : Math.max(limits.minWidth, Math.min(containerRect.width, startRect.width + moveEvt.clientX - startX));
         const heightPx = Math.max(limits.minHeight, Math.min(1200, startRect.height + moveEvt.clientY - startY));
-        const nextScale = Math.min(1, startScale * Math.min(widthPx / startRect.width, heightPx / startRect.height));
+        const nextScale = Math.max(0.2, Math.min(
+          1,
+          widthPx / moduleSize.baseWidth,
+          heightPx / moduleSize.baseHeight
+        ));
 
         if (!isHorizontal) {
           state.aModuleSizes[key].width = Math.round((widthPx / containerRect.width) * 1000) / 10;
@@ -609,7 +617,8 @@ function setupACommentFitControl() {
   applyACommentContentFit();
 }
 
-// 자유 입력 카드와 텍스트 영역이 조절된 모듈의 내부 높이를 채우도록 맞춘다.
+// 자유 입력 카드의 입력 영역만 모듈 높이에 맞춘다. 카드 자체를 flex로 눌러
+// 넣지 않아 제목/선택 버튼/체크박스가 찌그러지지 않는다.
 function applyACommentContentFit() {
   const module = document.getElementById('mod-comment');
   const button = document.getElementById('btn-fit-a-comment');
@@ -623,6 +632,7 @@ function applyACommentContentFit() {
 
   if (!enabled) {
     content.style.height = '';
+    content.querySelectorAll('textarea').forEach(textarea => { textarea.style.height = ''; });
     return;
   }
 
@@ -632,8 +642,27 @@ function applyACommentContentFit() {
   const dragBarHeight = module.querySelector('.module-drag-bar')?.offsetHeight ?? 0;
   if (module.clientHeight === 0) return;
   const verticalPadding = 24;
-  const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding);
-  content.style.height = `${Math.round(availableHeight / Math.max(scale, 0.1))}px`;
+  const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding) / Math.max(scale, 0.1);
+  const cards = content.querySelectorAll('.qa-card-item');
+  const textareas = content.querySelectorAll('textarea');
+  const headerAndGaps = cards.length * 56 + Math.max(0, cards.length - 1) * 12 + 42;
+  const textareaHeight = Math.max(65, Math.min(420, Math.floor((availableHeight - headerAndGaps) / Math.max(textareas.length, 1))));
+  content.style.height = '';
+  textareas.forEach(textarea => { textarea.style.height = `${textareaHeight}px`; });
+}
+
+// 크기가 고정된 자유 입력창에 새 카드를 더할 때 기존 입력창을 압축하지 않고,
+// 새 카드가 필요한 만큼 모듈 높이를 아래로 늘린다.
+function growACommentModuleForNewCard(currentTextareaHeight = 65) {
+  const module = document.getElementById('mod-comment');
+  const size = state.aModuleSizes.comment;
+  if (!module || !Number.isFinite(size.height)) return;
+
+  const scale = Number.isFinite(size.scale) ? size.scale : 1;
+  const newCardHeight = 56 + 12 + Math.max(65, currentTextareaHeight);
+  const addedHeight = Math.ceil(newCardHeight * Math.max(scale, 0.2));
+  size.height += addedHeight;
+  module.style.height = `${size.height}px`;
 }
 
 function applyAModuleContentScale(module, scale = 1) {
@@ -649,11 +678,13 @@ function setupModuleSizeReset() {
   if (!button) return;
   button.addEventListener('click', () => {
     state.aModuleSizes = {
-      table: { width: null, height: null, scale: 1 },
+      table: { width: null, height: null, scale: 1, baseWidth: null, baseHeight: null },
       comment: {
         width: null,
         height: null,
         scale: 1,
+        baseWidth: null,
+        baseHeight: null,
         fitContent: state.aModuleSizes.comment.fitContent
       }
     };
@@ -1018,10 +1049,19 @@ function setupACommentComponent() {
       container.appendChild(card);
     });
     bindItemDragEvents(container, state.aCommentList, render);
+    window.requestAnimationFrame(applyACommentContentFit);
   }
 
   btnAdd.onclick = () => {
+    const firstTextarea = container.querySelector('textarea');
+    const scale = Number.isFinite(state.aModuleSizes.comment.scale)
+      ? state.aModuleSizes.comment.scale
+      : 1;
+    const currentTextareaHeight = firstTextarea
+      ? Math.max(65, firstTextarea.getBoundingClientRect().height / Math.max(scale, 0.1))
+      : 65;
     state.aCommentList.push({ title: "Q. 새로운 질문", type: "textarea", value: "" });
+    growACommentModuleForNewCard(currentTextareaHeight);
     render();
   };
 
@@ -1482,6 +1522,8 @@ function setupShareCode() {
             width: Number.isFinite(size.width) ? size.width : null,
             height: Number.isFinite(size.height) ? size.height : null,
             scale: Number.isFinite(size.scale) ? size.scale : 1,
+            baseWidth: Number.isFinite(size.baseWidth) ? size.baseWidth : null,
+            baseHeight: Number.isFinite(size.baseHeight) ? size.baseHeight : null,
             ...(key === 'comment' ? { fitContent: Boolean(size.fitContent) } : {})
           };
         });

@@ -1074,6 +1074,31 @@ body.is-horizontal .toolbar-row {
     flex: 1;
     min-width: 0;
   }
+  .a-module-content-scale .qa-body {
+    min-width: 0;
+  }
+  /* 체크 표는 왼쪽 항목 칸을 먼저 줄이고 선택 칸은 읽을 수 있는 크기를 유지한다. */
+  .a-module-content-scale .matrix-table {
+    min-width: 0;
+  }
+  .a-module-content-scale .matrix-table th,
+  .a-module-content-scale .matrix-table td {
+    padding: 6px 4px;
+  }
+  .a-module-content-scale .matrix-table th.th-label,
+  .a-module-content-scale .matrix-table td.row-label {
+    min-width: 0;
+  }
+  .a-module-content-scale .matrix-table th.th-radio,
+  .a-module-content-scale .matrix-table td.td-radio {
+    width: 54px !important;
+    min-width: 54px !important;
+    max-width: 54px !important;
+  }
+  .a-module-content-scale .editable-cell-th,
+  .a-module-content-scale .editable-cell-td {
+    min-width: 0;
+  }
 }
 
 @container (max-width: 360px) {
@@ -1083,6 +1108,39 @@ body.is-horizontal .toolbar-row {
   .a-module-content-scale .btn-del-qa {
     flex: 0 0 34px;
     min-height: 28px;
+  }
+  .a-module-content-scale .matrix-table th,
+  .a-module-content-scale .matrix-table td {
+    padding: 5px 3px;
+    font-size: 0.72rem;
+  }
+  .a-module-content-scale .matrix-table th.th-radio,
+  .a-module-content-scale .matrix-table td.td-radio {
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+  }
+  .a-module-content-scale .matrix-table th.th-del-action,
+  .a-module-content-scale .matrix-table td.td-del-action {
+    width: 26px !important;
+    min-width: 26px !important;
+    max-width: 26px !important;
+  }
+  /* 체크박스형 자유 입력 카드는 좁아지면 한 줄씩 쌓아 텍스트가 잘리지 않는다. */
+  .a-module-content-scale .chip-options-editable {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .a-module-content-scale .custom-chip-edit {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    box-sizing: border-box;
+  }
+  .a-module-content-scale .chip-text-btn {
+    min-width: 0;
+    margin-right: 4px;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -1305,30 +1363,10 @@ body.is-horizontal .toolbar-row {
   overflow: visible;
 }
 
-/* "입력창 맞춤"을 켜면 남는 모듈 높이를 카드와 입력 필드에 배분한다. */
-.layout-a-comment-wrap.is-content-fitted .a-module-content-scale {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.layout-a-comment-wrap.is-content-fitted .a-comment-list {
-  flex: 1 1 0;
-  min-height: 0;
-}
-.layout-a-comment-wrap.is-content-fitted .qa-card-item {
-  flex: 1 1 0;
-  min-height: 0;
-}
-.layout-a-comment-wrap.is-content-fitted .qa-body {
-  display: flex;
-  flex: 1 1 0;
-  min-height: 0;
-}
+/* "입력창 맞춤"은 카드 골격을 누르지 않고 실제 입력 영역 높이만 변경한다. */
 .layout-a-comment-wrap.is-content-fitted .qa-body textarea {
-  flex: 1 1 0;
-  min-height: 0;
-  height: 100%;
-  resize: none;
+  min-height: 65px;
+  resize: vertical;
 }
 
 .a-comment-list {

@@ -186,6 +186,7 @@ function applyLayout(mode) {
   const viewB = document.getElementById('layout-b');
   const toolAComment = document.getElementById('tool-a-comment-wrap');
   const toolAFit = document.getElementById('tool-a-fit-wrap');
+  const toolACommentFit = document.getElementById('tool-a-comment-fit-wrap');
   const toolBScale = document.getElementById('tool-b-scale-wrap');
   const btnResetModuleSizes = document.getElementById('btn-reset-module-sizes');
 
@@ -199,6 +200,7 @@ function applyLayout(mode) {
   
   if (toolAComment) toolAComment.style.display = isA ? 'inline-flex' : 'none';
   if (toolAFit) toolAFit.style.display = isA ? 'inline-flex' : 'none';
+  if (toolACommentFit) toolACommentFit.style.display = isA ? 'inline-flex' : 'none';
   if (toolBScale) toolBScale.style.display = isA ? 'none' : 'inline-flex';
   if (btnResetModuleSizes) btnResetModuleSizes.style.display = isA ? 'inline-flex' : 'none';
 
@@ -604,15 +606,22 @@ function setupAModuleResizers() {
 
 function setupACommentFitControl() {
   const button = document.getElementById('btn-fit-a-comment');
-  if (!button) return;
+  const checkbox = document.getElementById('chk-a-comment-fit');
+  if (!button && !checkbox) return;
 
-  button.addEventListener('mousedown', (e) => e.stopPropagation());
-  button.addEventListener('click', (e) => {
+  button?.addEventListener('mousedown', (e) => e.stopPropagation());
+  button?.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     const commentSize = state.aModuleSizes.comment;
     commentSize.fitContent = !commentSize.fitContent;
     applyACommentContentFit();
+    window.requestAnimationFrame(trimACommentModuleBlankSpace);
+  });
+  checkbox?.addEventListener('change', (e) => {
+    state.aModuleSizes.comment.fitContent = e.target.checked;
+    applyACommentContentFit();
+    window.requestAnimationFrame(trimACommentModuleBlankSpace);
   });
   applyACommentContentFit();
 }
@@ -622,13 +631,17 @@ function setupACommentFitControl() {
 function applyACommentContentFit() {
   const module = document.getElementById('mod-comment');
   const button = document.getElementById('btn-fit-a-comment');
+  const checkbox = document.getElementById('chk-a-comment-fit');
   const content = module?.querySelector('.a-module-content-scale');
-  if (!module || !content || !button) return;
+  if (!module || !content) return;
 
   const enabled = Boolean(state.aModuleSizes.comment.fitContent);
   module.classList.toggle('is-content-fitted', enabled);
-  button.setAttribute('aria-pressed', String(enabled));
-  button.textContent = enabled ? '✓ 입력창 맞춤' : '↕ 입력창 맞춤';
+  if (button) {
+    button.setAttribute('aria-pressed', String(enabled));
+    button.textContent = enabled ? '✓ 입력창 맞춤' : '↕ 입력창 맞춤';
+  }
+  if (checkbox) checkbox.checked = enabled;
 
   if (!enabled) {
     content.style.height = '';
@@ -642,13 +655,35 @@ function applyACommentContentFit() {
   const dragBarHeight = module.querySelector('.module-drag-bar')?.offsetHeight ?? 0;
   if (module.clientHeight === 0) return;
   const verticalPadding = 24;
-  const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding) / Math.max(scale, 0.1);
+  const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding - 10) / Math.max(scale, 0.1);
   const cards = content.querySelectorAll('.qa-card-item');
   const textareas = content.querySelectorAll('textarea');
   const headerAndGaps = cards.length * 56 + Math.max(0, cards.length - 1) * 12 + 42;
-  const textareaHeight = Math.max(65, Math.min(420, Math.floor((availableHeight - headerAndGaps) / Math.max(textareas.length, 1))));
+  const textareaHeight = Math.max(65, Math.floor((availableHeight - headerAndGaps) / Math.max(textareas.length, 1)));
   content.style.height = '';
   textareas.forEach(textarea => { textarea.style.height = `${textareaHeight}px`; });
+}
+
+// 고정 크기가 설정된 자유 입력창은 실제 카드 높이까지만 차지하게 해 하단의
+// 불필요한 빈 공간을 없앤다. 사용자가 다시 모서리를 드래그하면 그 크기가 새 기준이 된다.
+function trimACommentModuleBlankSpace() {
+  const module = document.getElementById('mod-comment');
+  const content = module?.querySelector('.a-module-content-scale');
+  const size = state.aModuleSizes.comment;
+  if (!module || !content || !Number.isFinite(size.height) || module.classList.contains('is-resizing')) return;
+
+  const dragBarHeight = module.querySelector('.module-drag-bar')?.offsetHeight ?? 0;
+  const contentHeight = content.getBoundingClientRect().height;
+  if (!contentHeight) return;
+
+  const desiredHeight = Math.max(
+    A_MODULE_SIZE_LIMITS.comment.minHeight,
+    Math.ceil(24 + dragBarHeight + 10 + contentHeight)
+  );
+  if (Math.abs(desiredHeight - size.height) > 1) {
+    size.height = desiredHeight;
+    module.style.height = `${desiredHeight}px`;
+  }
 }
 
 // 크기가 고정된 자유 입력창에 새 카드를 더할 때 기존 입력창을 압축하지 않고,
@@ -721,6 +756,7 @@ function applyAModuleSizes() {
     applyAModuleContentScale(module, Number.isFinite(size.scale) ? size.scale : 1);
   });
   applyACommentContentFit();
+  window.requestAnimationFrame(trimACommentModuleBlankSpace);
 }
 
 function setupTableFitToggle() {
@@ -1049,7 +1085,10 @@ function setupACommentComponent() {
       container.appendChild(card);
     });
     bindItemDragEvents(container, state.aCommentList, render);
-    window.requestAnimationFrame(applyACommentContentFit);
+    window.requestAnimationFrame(() => {
+      applyACommentContentFit();
+      trimACommentModuleBlankSpace();
+    });
   }
 
   btnAdd.onclick = () => {

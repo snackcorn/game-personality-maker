@@ -9,6 +9,19 @@ export async function exportCardAsPNG(cardElementId, fileName = 'gaming_personal
   cardEl.classList.add('exporting');
 
   try {
+    // Data URL 스티커를 포함한 모든 이미지가 완전히 그려진 뒤 캡처한다.
+    await Promise.all(Array.from(cardEl.querySelectorAll('img')).map(async (img) => {
+      if (!img.complete) {
+        await new Promise(resolve => {
+          img.addEventListener('load', resolve, { once: true });
+          img.addEventListener('error', resolve, { once: true });
+        });
+      }
+      if (img.decode) {
+        try { await img.decode(); } catch (_) { /* 이미 표시 가능한 이미지는 그대로 캡처 */ }
+      }
+    }));
+
     const canvas = await html2canvas(cardEl, {
       scale: 2,
       useCORS: true,

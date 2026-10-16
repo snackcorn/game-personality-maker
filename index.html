@@ -73,18 +73,25 @@
       </button>
 
       <label class="btn-ui" for="input-free-image">
-        ✨ 자유 이미지
+        ✨ 스티커 추가
         <input type="file" id="input-free-image" accept="image/*" hidden />
       </label>
 
       <button type="button" id="btn-clear-images" class="btn-ui btn-danger">
-        🗑️ 이미지 전체 삭제
+        🗑️ 스티커 전체 삭제
       </button>
     </div>
   </section>
 
-  <!-- 캡처 대상 메인 카드 -->
-  <main id="export-card" class="card-canvas">
+  <section class="workspace-layout" aria-label="편집 및 미리보기 작업 영역">
+    <div class="editor-pane">
+      <div class="workspace-heading">
+        <h2>편집</h2>
+        <p>카드를 직접 수정하고 스티커를 배치하세요.</p>
+      </div>
+
+      <!-- 캡처 대상 메인 카드 -->
+      <main id="export-card" class="card-canvas">
     <div class="card-bg-overlay"></div>
 
     <!-- [레이어 1] 텍스트 아래 깔리는 이미지 (z-index: 3) -->
@@ -182,7 +189,19 @@
 
     <!-- [레이어 3] 텍스트 위 스티커 (z-index: 10) -->
     <div id="layer-front-images" class="custom-image-layer layer-front"></div>
-  </main>
+      </main>
+    </div>
+
+    <aside class="preview-pane" aria-label="완성 이미지 미리보기">
+      <div class="workspace-heading">
+        <h2>완성 이미지 미리보기</h2>
+        <p>PNG 저장 시 편집 도구가 제거된 결과입니다.</p>
+      </div>
+      <div id="preview-viewport" class="preview-viewport">
+        <div id="preview-stage" class="preview-stage"></div>
+      </div>
+    </aside>
+  </section>
 
   <footer class="action-footer">
     <button id="btn-export-png" class="btn-export" type="button">트위터용 이미지 저장 (PNG)</button>

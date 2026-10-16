@@ -294,6 +294,11 @@ body.is-horizontal .toolbar-row {
   margin: 0;
   width: 14px;
   height: 14px;
+  min-width: 14px;
+  min-height: 14px;
+  max-width: 14px;
+  max-height: 14px;
+  flex: 0 0 14px;
 }
 
 .select-wrapper {
@@ -342,6 +347,67 @@ body.is-horizontal .toolbar-row {
 
 .card-canvas.horizontal-mode {
   max-width: 1040px;
+}
+
+/* 편집 카드와 내보내기 기준 미리보기를 넓은 화면에서 나란히 배치한다. */
+.workspace-layout {
+  width: min(100%, 1760px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 24px;
+  align-items: start;
+}
+.editor-pane,
+.preview-pane {
+  min-width: 0;
+}
+.editor-pane .card-canvas {
+  max-width: none;
+}
+.workspace-heading {
+  margin: 0 0 10px;
+}
+.workspace-heading h2 {
+  color: var(--accent);
+  font-size: 1rem;
+}
+.workspace-heading p {
+  color: var(--subtext);
+  font-size: 0.78rem;
+  margin-top: 3px;
+}
+.preview-pane {
+  position: sticky;
+  top: 16px;
+}
+.preview-viewport {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.preview-stage {
+  width: 100%;
+  position: relative;
+}
+.preview-card {
+  transform-origin: top left;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+@media (max-width: 1080px) {
+  .workspace-layout {
+    grid-template-columns: 1fr;
+  }
+  .preview-pane {
+    position: static;
+  }
+  .editor-pane .card-canvas {
+    max-width: 780px;
+    margin: 0 auto;
+  }
 }
 
 .card-bg-overlay {
@@ -1004,6 +1070,7 @@ body.is-horizontal .toolbar-row {
 
 .matrix-table {
   width: 100%;
+  min-width: 320px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -1039,14 +1106,21 @@ body.is-horizontal .toolbar-row {
 }
 
 .matrix-table input[type="radio"] {
+  display: block;
   width: 16px;
   height: 16px;
   min-width: 16px;
   min-height: 16px;
+  max-width: 16px;
+  max-height: 16px;
+  margin: 0 auto;
   accent-color: var(--accent);
   cursor: pointer;
   vertical-align: middle;
   flex-shrink: 0;
+}
+.layout-a-table-wrap {
+  overflow-x: auto;
 }
 
 .editable-cell-th, .editable-cell-td {

@@ -1,5 +1,5 @@
 /**
- * 자유 이미지 배치, 마우스 휠 리사이즈, 레이어 순서 관리 모듈
+ * 스티커 배치, 마우스 휠 리사이즈, 레이어 순서 관리 모듈
  */
 export class LayerManager {
   constructor(backContainerId, frontContainerId) {
@@ -16,7 +16,8 @@ export class LayerManager {
 
   addImage(src, layer = 'front') {
     const id = 'img_' + Date.now() + Math.random().toString(36).substr(2, 4);
-    const itemData = { id, src, x: 50, y: 120, width: 120, layer };
+    // 카드 크기가 달라져도 같은 위치에 남도록 모든 좌표를 백분율로 보관한다.
+    const itemData = { id, src, xRatio: 6, yRatio: 20, widthRatio: 15, rotation: 0, flipX: false, layer };
     this.items.push(itemData);
     this.renderItem(itemData);
   }
@@ -25,14 +26,17 @@ export class LayerManager {
     const el = document.createElement('div');
     el.id = itemData.id;
     el.className = 'floating-img-item';
-    el.style.left = `${itemData.x}px`;
-    el.style.top = `${itemData.y}px`;
-    el.style.width = `${itemData.width}px`;
+    el.style.left = `${itemData.xRatio}%`;
+    el.style.top = `${itemData.yRatio}%`;
+    el.style.width = `${itemData.widthRatio}%`;
+    this.applyTransform(el, itemData);
 
     el.innerHTML = `
       <div class="floating-img-controls">
         <button type="button" class="btn-up">글자 위로</button>
         <button type="button" class="btn-down">글자 아래로</button>
+        <button type="button" class="btn-rotate" title="시계 방향으로 15도 회전">↻ 회전</button>
+        <button type="button" class="btn-flip" title="스티커 좌우 반전">↔ 반전</button>
         <button type="button" class="btn-del">삭제</button>
       </div>
       <img src="${itemData.src}" alt="스티커" />
@@ -52,6 +56,16 @@ export class LayerManager {
       e.stopPropagation();
       this.switchLayer(itemData.id, 'back');
     };
+    el.querySelector('.btn-rotate').onclick = (e) => {
+      e.stopPropagation();
+      itemData.rotation = (itemData.rotation + 15) % 360;
+      this.applyTransform(el, itemData);
+    };
+    el.querySelector('.btn-flip').onclick = (e) => {
+      e.stopPropagation();
+      itemData.flipX = !itemData.flipX;
+      this.applyTransform(el, itemData);
+    };
     el.querySelector('.btn-del').onclick = (e) => {
       e.stopPropagation();
       this.removeItem(itemData.id);
@@ -59,21 +73,23 @@ export class LayerManager {
 
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const delta = e.deltaY < 0 ? 12 : -12;
-      itemData.width = Math.max(40, Math.min(600, itemData.width + delta));
-      el.style.width = `${itemData.width}px`;
+      const parentWidth = el.parentElement.getBoundingClientRect().width || 1;
+      const delta = (e.deltaY < 0 ? 12 : -12) / parentWidth * 100;
+      itemData.widthRatio = Math.max(5, Math.min(80, itemData.widthRatio + delta));
+      el.style.width = `${itemData.widthRatio}%`;
     }, { passive: false });
 
     const resizeHandle = el.querySelector('.img-resize-handle');
     resizeHandle.onmousedown = (e) => {
       e.stopPropagation();
       const startX = e.clientX;
-      const startWidth = itemData.width;
+      const startWidth = itemData.widthRatio;
 
       const onMouseMove = (moveEvt) => {
-        const newWidth = Math.max(40, startWidth + (moveEvt.clientX - startX));
-        itemData.width = newWidth;
-        el.style.width = `${newWidth}px`;
+        const parentWidth = el.parentElement.getBoundingClientRect().width || 1;
+        const newWidth = Math.max(5, Math.min(80, startWidth + ((moveEvt.clientX - startX) / parentWidth * 100)));
+        itemData.widthRatio = newWidth;
+        el.style.width = `${newWidth}%`;
       };
 
       const onMouseUp = () => {
@@ -87,16 +103,18 @@ export class LayerManager {
 
     el.onmousedown = (e) => {
       if (e.target.tagName === 'BUTTON' || e.target.classList.contains('img-resize-handle')) return;
-      const startX = e.clientX - el.offsetLeft;
-      const startY = e.clientY - el.offsetTop;
+      const rect = el.getBoundingClientRect();
+      const startX = e.clientX - rect.left;
+      const startY = e.clientY - rect.top;
       
       const onMouseMove = (moveEvt) => {
-        const newX = moveEvt.clientX - startX;
-        const newY = moveEvt.clientY - startY;
-        el.style.left = `${newX}px`;
-        el.style.top = `${newY}px`;
-        itemData.x = newX;
-        itemData.y = newY;
+        const parentRect = el.parentElement.getBoundingClientRect();
+        const newX = ((moveEvt.clientX - startX - parentRect.left) / parentRect.width) * 100;
+        const newY = ((moveEvt.clientY - startY - parentRect.top) / parentRect.height) * 100;
+        itemData.xRatio = newX;
+        itemData.yRatio = newY;
+        el.style.left = `${newX}%`;
+        el.style.top = `${newY}%`;
       };
 
       const onMouseUp = () => {
@@ -122,6 +140,12 @@ export class LayerManager {
     newParent.appendChild(el);
   }
 
+  applyTransform(el, itemData) {
+    const scaleX = itemData.flipX ? -1 : 1;
+    const image = el.querySelector('img');
+    if (image) image.style.transform = `rotate(${itemData.rotation}deg) scaleX(${scaleX})`;
+  }
+
   removeItem(id) {
     this.items = this.items.filter(i => i.id !== id);
     const el = document.getElementById(id);
@@ -137,9 +161,11 @@ export class LayerManager {
   getSerialized() {
     return this.items.map(item => ({
       src: item.src,
-      x: item.x,
-      y: item.y,
-      width: item.width,
+      xRatio: item.xRatio,
+      yRatio: item.yRatio,
+      widthRatio: item.widthRatio,
+      rotation: item.rotation,
+      flipX: item.flipX,
       layer: item.layer
     }));
   }
@@ -149,12 +175,16 @@ export class LayerManager {
     if (!Array.isArray(serializedItems)) return;
     serializedItems.forEach(item => {
       const id = 'img_' + Date.now() + Math.random().toString(36).substr(2, 4);
+      const layerRect = (item.layer === 'back' ? this.layerBack : this.layerFront).getBoundingClientRect();
       const itemData = {
         id,
         src: item.src,
-        x: item.x || 50,
-        y: item.y || 120,
-        width: item.width || 120,
+        // 이전 식별코드의 픽셀 좌표도 현재 카드 크기를 기준으로 변환한다.
+        xRatio: Number.isFinite(item.xRatio) ? item.xRatio : ((item.x || 50) / (layerRect.width || 780) * 100),
+        yRatio: Number.isFinite(item.yRatio) ? item.yRatio : ((item.y || 120) / (layerRect.height || 580) * 100),
+        widthRatio: Number.isFinite(item.widthRatio) ? item.widthRatio : ((item.width || 120) / (layerRect.width || 780) * 100),
+        rotation: Number.isFinite(item.rotation) ? item.rotation : 0,
+        flipX: item.flipX === true,
         layer: item.layer || 'front'
       };
       this.items.push(itemData);

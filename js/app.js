@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupQAComponent();
   setupModuleDragAndDrop();
   setupShareCode();
+  setupLivePreview();
   
   // 초기 UI 동기화
   applyLayout('A');
@@ -91,6 +92,64 @@ document.addEventListener('DOMContentLoaded', () => {
   renderMetaFields();
   applyProfileLayout();
 });
+
+// 편집 카드와 같은 DOM을 내보내기 스타일로 복제해 우측에 실시간 미리보기로 표시한다.
+function setupLivePreview() {
+  const source = document.getElementById('export-card');
+  const stage = document.getElementById('preview-stage');
+  const viewport = document.getElementById('preview-viewport');
+  if (!source || !stage || !viewport) return;
+
+  let queued = false;
+  const renderPreview = () => {
+    queued = false;
+    const sourceWidth = source.getBoundingClientRect().width;
+    if (!sourceWidth) return;
+
+    const clone = source.cloneNode(true);
+    clone.id = 'preview-card';
+    clone.classList.add('exporting', 'preview-card');
+    clone.style.width = `${sourceWidth}px`;
+    clone.style.maxWidth = 'none';
+    clone.setAttribute('aria-hidden', 'true');
+
+    // cloneNode는 브라우저별로 현재 입력값을 놓칠 수 있어 명시적으로 동기화한다.
+    const sourceFields = source.querySelectorAll('input, textarea, select');
+    const previewFields = clone.querySelectorAll('input, textarea, select');
+    sourceFields.forEach((field, index) => {
+      const previewField = previewFields[index];
+      if (!previewField) return;
+      previewField.value = field.value;
+      if ('checked' in field) previewField.checked = field.checked;
+      if (field.tagName === 'SELECT') previewField.selectedIndex = field.selectedIndex;
+    });
+    stage.replaceChildren(clone);
+
+    requestAnimationFrame(() => {
+      const scale = Math.min(1, viewport.clientWidth / sourceWidth);
+      clone.style.transform = `scale(${scale})`;
+      stage.style.height = `${clone.offsetHeight * scale}px`;
+    });
+  };
+  const schedulePreview = () => {
+    if (!queued) {
+      queued = true;
+      requestAnimationFrame(renderPreview);
+    }
+  };
+
+  document.addEventListener('input', schedulePreview, true);
+  document.addEventListener('change', schedulePreview, true);
+  new MutationObserver(schedulePreview).observe(source, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'src', 'checked', 'selected']
+  });
+  new ResizeObserver(schedulePreview).observe(source);
+  new ResizeObserver(schedulePreview).observe(viewport);
+  renderPreview();
+}
 
 // 1. 개인정보 보호 팝업
 function setupPrivacyNotice() {
@@ -156,6 +215,10 @@ function applyOrientation(orient) {
   if (card) card.classList.toggle('horizontal-mode', isH);
   if (document.body) document.body.classList.toggle('is-horizontal', isH);
   if (resizer) resizer.style.display = (state.layout === 'A' && state.showAComment && isH) ? 'flex' : 'none';
+
+  // 표 너비 리사이즈 값은 가로 모드 전용이다. 세로 모드에서는 100% 폭을 사용한다.
+  const tableWrap = document.getElementById('mod-table');
+  if (tableWrap) tableWrap.style.width = isH ? `${state.tableWidthPercent}%` : '';
 }
 
 function setupLayoutSwitch() {
@@ -1227,7 +1290,7 @@ function setupShareCode() {
       if (data.tableWidthPercent) {
         state.tableWidthPercent = data.tableWidthPercent;
         const tableWrap = document.getElementById('mod-table');
-        if (tableWrap) tableWrap.style.width = `${data.tableWidthPercent}%`;
+        if (tableWrap && state.orientation === 'H') tableWrap.style.width = `${data.tableWidthPercent}%`;
       }
 
       if (data.tableFitFill !== undefined) {

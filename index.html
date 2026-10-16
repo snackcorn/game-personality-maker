@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>멀티/협동게임 성향표 생성기</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <h1>🎮 멀티/협동게임 성향표 생성기</h1>
+    <p>성향표를 자유롭게 커스텀하고 식별코드로 공유하거나 고화질 이미지로 저장하세요.</p>
+  </header>
+
+  <!-- 상단: 식별코드 공유 패널 -->
+  <section class="control-panel share-bar">
+    <div class="input-with-btn">
+      <input type="text" id="share-code-input" placeholder="식별코드를 붙여넣어 불러오기" autocomplete="off" />
+      <button id="btn-load-code" class="btn-ui" type="button">코드 적용</button>
+    </div>
+    <button id="btn-gen-code" class="btn-ui btn-accent" type="button">식별코드 발급</button>
+  </section>
+
+  <!-- 상단: 조작 툴바 (3그룹 분리) -->
+  <section class="control-panel toolbar">
+    <!-- [1그룹] a/b타입, 세로형 가로형 -->
+    <div class="toolbar-row group-1">
+      <div class="segmented-control">
+        <button id="tab-a" class="segment-btn active" data-layout="A" type="button">타입 A (표형식)</button>
+        <button id="tab-b" class="segment-btn" data-layout="B" type="button">타입 B (카드형식)</button>
+      </div>
+
+      <div class="segmented-control">
+        <button id="btn-orient-v" class="segment-btn active" type="button">📱 세로형</button>
+        <button id="btn-orient-h" class="segment-btn" type="button">🖥️ 가로형</button>
+      </div>
+    </div>
+
+    <!-- [2그룹] a타입 전용 편집, 프로필 사이즈, 입력창 사이즈 -->
+    <div class="toolbar-row group-2">
+      <!-- a타입 전용 편집 도구 -->
+      <label class="btn-ui btn-toggle" id="tool-a-comment-wrap">
+        <input type="checkbox" id="chk-a-comment" checked />
+        <span>자유 입력창</span>
+      </label>
+
+      <label class="btn-ui btn-toggle" id="tool-a-fit-wrap">
+        <input type="checkbox" id="chk-a-fit" />
+        <span>표 꽉 채우기</span>
+      </label>
+
+      <!-- 프로필 사이즈 -->
+      <div class="segmented-control" title="프로필 영역 크기">
+        <span class="segment-label">프로필</span>
+        <button id="btn-prof-size-normal" class="segment-btn active" type="button">보통</button>
+        <button id="btn-prof-size-large" class="segment-btn" type="button">크게</button>
+      </div>
+
+      <!-- 입력창 사이즈 (B타입 전용) -->
+      <div class="segmented-control" id="tool-b-scale-wrap" style="display: none;" title="B타입 입력창 크기">
+        <span class="segment-label">입력창</span>
+        <button id="btn-input-scale-normal" class="segment-btn active" type="button">보통</button>
+        <button id="btn-input-scale-large" class="segment-btn" type="button">크게</button>
+      </div>
+    </div>
+
+    <!-- [3그룹] 나머지 버튼 (컬러 커스텀, 자유 이미지, 이미지 전체 삭제) -->
+    <div class="toolbar-row group-3 tool-actions">
+      <button type="button" id="btn-open-color-picker" class="btn-ui btn-highlight">
+        🎨 컬러 커스텀
+      </button>
+
+      <label class="btn-ui" for="input-free-image">
+        ✨ 자유 이미지
+        <input type="file" id="input-free-image" accept="image/*" hidden />
+      </label>
+
+      <button type="button" id="btn-clear-images" class="btn-ui btn-danger">
+        🗑️ 이미지 전체 삭제
+      </button>
+    </div>
+  </section>
+
+  <!-- 캡처 대상 메인 카드 -->
+  <main id="export-card" class="card-canvas">
+    <div class="card-bg-overlay"></div>
+
+    <!-- [레이어 1] 텍스트 아래 깔리는 이미지 (z-index: 3) -->
+    <div id="layer-back-images" class="custom-image-layer layer-back"></div>
+
+    <!-- [레이어 2] 메인 텍스트 레이어 (z-index: 5) -->
+    <div class="card-content-layer" id="module-container">
+      
+      <!-- [공통 모듈] 프로필 헤더 모듈 -->
+      <section class="draggable-module" id="mod-profile">
+        <div class="module-drag-bar" title="드래그하여 위치 변경">
+          <span class="drag-handle-icon">⠿ 프로필 블록</span>
+        </div>
+
+        <div class="profile-toolbar">
+          <button type="button" id="btn-profile-add-field">+ 칸 추가</button>
+          <button type="button" id="btn-profile-toggle-pos">↔ 인장 위치: 좌</button>
+          <button type="button" id="btn-profile-toggle-divider">구분선: ON</button>
+          <button type="button" id="btn-profile-toggle-bg">배경: OFF</button>
+        </div>
+
+        <div class="profile-header has-divider" id="profile-header-wrap">
+          <label class="avatar-box" for="input-avatar-file" id="avatar-box-el">
+            <canvas id="avatar-canvas" width="85" height="85" style="display: none;"></canvas>
+            <img id="avatar-preview" alt="Avatar" style="display: none;" />
+            <span id="avatar-label">인장 / 사진<br/>(클릭 업로드)</span>
+            <input type="file" id="input-avatar-file" accept="image/*" hidden />
+          </label>
+          <div class="meta-inputs" id="meta-inputs-container">
+            <!-- JS 동적 렌더링 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- [타입 A 전용 래퍼: 타입 B일 때는 완전히 숨김] -->
+      <div id="layout-a" class="layout-view draggable-module">
+        <div class="module-drag-bar" title="드래그하여 위치 변경">
+          <span class="drag-handle-icon">⠿ 성향표 전체 블록</span>
+        </div>
+        <div class="layout-a-container" id="a-container">
+          
+          <!-- A-1: 표 영역 -->
+          <div class="layout-a-table-wrap inner-module has-bg" id="mod-table">
+            <div class="module-drag-bar" title="드래그하여 코멘트창과 좌우/상하 변경">
+              <span class="drag-handle-icon">⠿ 표 위치 변경</span>
+            </div>
+
+            <!-- 체크리스트 배경 토글 호버 툴바 -->
+            <div class="table-hover-toolbar">
+              <button type="button" id="btn-table-toggle-bg">배경: ON</button>
+            </div>
+
+            <table class="matrix-table" id="matrix-table-el">
+              <thead>
+                <tr>
+                  <th class="th-label"><input type="text" class="editable-cell-th" value="항목 \ 성향" /></th>
+                  <th class="th-radio"><input type="text" class="editable-cell-th" value="선호/필수" /></th>
+                  <th class="th-radio"><input type="text" class="editable-cell-th" value="맞춤/보통" /></th>
+                  <th class="th-radio"><input type="text" class="editable-cell-th" value="비선호" /></th>
+                  <th class="th-del-action" style="width: 32px;"></th>
+                </tr>
+              </thead>
+              <tbody id="matrix-table-body"></tbody>
+            </table>
+            <button type="button" id="btn-add-table-row" class="btn-add-table-row">+ 체크 항목 추가</button>
+          </div>
+
+          <!-- 리사이즈 구분선 (중앙선) -->
+          <div class="a-divider-resizer" id="a-resizer" title="좌우로 드래그하여 표 너비 조절">
+            <div class="divider-line"></div>
+          </div>
+
+          <!-- A-2: 자유 입력창 모듈 (아래로만 추가) -->
+          <div class="layout-a-comment-wrap inner-module" id="mod-comment">
+            <div class="module-drag-bar" title="드래그하여 표와 좌우/상하 변경">
+              <span class="drag-handle-icon">⠿ 자유 입력창 위치 변경</span>
+            </div>
+            <div id="a-comment-container" class="a-comment-list"></div>
+            <button type="button" id="btn-add-a-comment" class="btn-add-card">+ 창 추가</button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- [타입 B 전용 래퍼: 타입 A일 때는 완전히 숨김] -->
+      <section class="layout-view draggable-module" id="layout-b" style="display: none;">
+        <div class="module-drag-bar" title="드래그하여 위치 변경">
+          <span class="drag-handle-icon">⠿ Q&A 카드 리스트 블록</span>
+        </div>
+        <div id="qa-container" class="qa-list"></div>
+        <button type="button" id="btn-add-qa" class="btn-add-card">+ 질문 항목 추가</button>
+      </section>
+
+    </div>
+
+    <!-- [레이어 3] 텍스트 위 스티커 (z-index: 10) -->
+    <div id="layer-front-images" class="custom-image-layer layer-front"></div>
+  </main>
+
+  <footer class="action-footer">
+    <button id="btn-export-png" class="btn-export" type="button">트위터용 이미지 저장 (PNG)</button>
+  </footer>
+
+  <!-- 통합 컬러 커스텀 모달 (테마 프리셋 + 배경이미지 + 색상 피커) -->
+  <div id="custom-color-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content color-modal">
+      <div class="modal-header">
+        <h3>🎨 컬러 커스텀 & 배경 설정</h3>
+        <button type="button" id="btn-close-color-modal" class="modal-close-btn">✕</button>
+      </div>
+
+      <div class="modal-body color-modal-body">
+        <!-- 1. 테마 프리셋 -->
+        <div class="custom-section">
+          <label class="section-title">테마 프리셋</label>
+          <div class="select-wrapper full-width">
+            <select id="theme-selector" class="btn-ui select-ui full-width">
+              <option value="cyber">사이버 네온</option>
+              <option value="purple">미드나잇 퍼플</option>
+              <option value="emerald">레트로 에메랄드</option>
+              <option value="pink">체리 블러썸</option>
+              <option value="monochrome">모노크롬</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 2. 카드 배경 이미지 설정 -->
+        <div class="custom-section">
+          <label class="section-title">카드 배경 이미지</label>
+          <div class="bg-image-controls">
+            <label class="btn-ui" for="input-bg-file" style="flex: 1; justify-content: center;">
+              🖼️ 배경 이미지 선택
+              <input type="file" id="input-bg-file" accept="image/*" hidden />
+            </label>
+            <button type="button" id="btn-remove-bg-img" class="btn-ui btn-danger" style="display: none;">
+              배경 제거
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. 상세 컬러 피커 (베이스 컬러 = 카드 배경색) -->
+        <div class="custom-section">
+          <label class="section-title">상세 컬러 편집</label>
+          <div class="color-picker-grid">
+            <div class="color-picker-item">
+              <label for="cp-bg">베이스(카드 배경) 컬러</label>
+              <input type="color" id="cp-bg" value="#111827" />
+            </div>
+            <div class="color-picker-item">
+              <label for="cp-input-bg">내용입력창 배경색</label>
+              <input type="color" id="cp-input-bg" value="#1e293b" />
+            </div>
+            <div class="color-picker-item">
+              <label for="cp-border">테두리(경계선) 색</label>
+              <input type="color" id="cp-border" value="#334155" />
+            </div>
+            <div class="color-picker-item">
+              <label for="cp-text">주 글자색 (텍스트)</label>
+              <input type="color" id="cp-text" value="#f8fafc" />
+            </div>
+            <div class="color-picker-item">
+              <label for="cp-accent">포인트 강조색</label>
+              <input type="color" id="cp-accent" value="#38bdf8" />
+            </div>
+            <div class="color-picker-item">
+              <label for="cp-prof-bg">프로필 박스 배경색</label>
+              <input type="color" id="cp-prof-bg" value="#1e293b" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btn-reset-color" class="modal-btn-cancel">초기화</button>
+        <button type="button" id="btn-apply-color" class="modal-btn-apply">완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 아바타 크롭 모달 -->
+  <div id="avatar-crop-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>🖼️ 프로필 사진 위치 및 배율 조정</h3>
+        <button type="button" id="btn-modal-close" class="modal-close-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-guide">사진을 마우스로 드래그하여 중심을 맞추고, 슬라이더로 크기를 조절하세요.</p>
+        <div class="avatar-crop-viewport" id="crop-viewport">
+          <img id="crop-target-img" src="" alt="Crop Target" draggable="false" />
+        </div>
+        <div class="crop-zoom-control">
+          <span>축소</span>
+          <input type="range" id="crop-zoom-range" min="1" max="3" step="0.05" value="1" />
+          <span>확대</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="btn-crop-cancel" class="modal-btn-cancel">취소</button>
+        <button type="button" id="btn-crop-apply" class="modal-btn-apply">적용하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 사이트 접속 시 개인정보 보호 안내 팝업 -->
+  <div id="privacy-notice-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content privacy-modal">
+      <div class="modal-header">
+        <h3 style="color: #38bdf8;">🔒 개인정보 보호 및 이용 안내</h3>
+      </div>
+      <div class="modal-body" style="text-align: left; font-size: 0.85rem; line-height: 1.6; color: #cbd5e1;">
+        <p style="margin-bottom: 10px;">
+          본 사이트는 <strong>별도의 서버나 데이터베이스 없이 사용자의 기기에서만 실행</strong>되는 안전한 클라이언트 사이드 프로그램입니다. 사용자가 입력한 어떠한 정보도 사이트 서버에 저장되지 않습니다.
+        </p>
+        <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; border-left: 3px solid #38bdf8; margin-bottom: 12px;">
+          <strong style="color: #f8fafc;">⚠️ 안전한 공유를 위한 권장사항:</strong>
+          <ul style="margin-top: 6px; padding-left: 18px; color: #94a3b8; font-size: 0.8rem;">
+            <li>발급되는 식별코드 및 이미지에는 <strong>실명, 전화번호, 상세 거주지, 비밀번호</strong> 등 민감정보를 절대 적지 마세요.</li>
+            <li>인장/프로필 사진 업로드 시 <strong>실제 얼굴이나 주변 배경이 노출되는 사진</strong> 대신 일러스트나 게임 스크린샷을 권장합니다.</li>
+            <li>발급된 식별코드는 누구나 열람할 수 있는 일반 텍스트 코드로 변환되므로 공개 가능한 닉네임만 사용해 주세요.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between; align-items: center;">
+        <label style="font-size: 0.80rem; color: #94a3b8; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+          <input type="checkbox" id="chk-hide-privacy" style="accent-color: #38bdf8;"> 오늘 하루 보지 않기
+        </label>
+        <button type="button" id="btn-privacy-confirm" class="modal-btn-apply">확인 및 시작</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

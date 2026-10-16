@@ -353,7 +353,7 @@ body.is-horizontal .toolbar-row {
 .workspace-layout {
   width: min(100%, 1760px);
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
   align-items: start;
 }
@@ -389,12 +389,11 @@ body.is-horizontal .toolbar-row {
 }
 .preview-stage {
   width: 100%;
-  position: relative;
 }
-.preview-card {
-  transform-origin: top left;
-  pointer-events: none;
-  box-shadow: none;
+.preview-image {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 @media (max-width: 1080px) {
@@ -783,8 +782,36 @@ body.is-horizontal .toolbar-row {
   display: none;
   z-index: 101;
 }
+.img-rotate-handle {
+  position: absolute;
+  left: -6px;
+  bottom: -6px;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: grab;
+  display: none;
+  z-index: 101;
+}
+.img-rotate-handle::before {
+  content: '↻';
+  color: #0b0f19;
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 12px;
+  position: absolute;
+  top: 0;
+  left: 1px;
+}
+.img-rotate-handle:active {
+  cursor: grabbing;
+}
 .floating-img-item:hover .img-resize-handle,
-.floating-img-item.active .img-resize-handle {
+.floating-img-item.active .img-resize-handle,
+.floating-img-item:hover .img-rotate-handle,
+.floating-img-item.active .img-rotate-handle {
   display: block;
 }
 
@@ -941,6 +968,7 @@ body.is-horizontal .toolbar-row {
 .layout-a-container {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 16px;
   position: relative;
   width: 100%;
@@ -960,6 +988,23 @@ body.is-horizontal .toolbar-row {
   border-radius: 12px;
   padding: 12px;
   box-sizing: border-box;
+  overflow: auto;
+}
+.a-module-resize-handle {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  background: var(--accent);
+  cursor: nwse-resize;
+  display: none;
+  z-index: 20;
+}
+.inner-module:hover .a-module-resize-handle {
+  display: block;
 }
 
 .card-canvas.horizontal-mode .layout-a-table-wrap {
@@ -1171,10 +1216,12 @@ body.is-horizontal .toolbar-row {
   padding: 12px;
   flex: 1;
   min-width: 240px;
+  width: 100%;
   display: flex !important;
   flex-direction: column !important;
   gap: 10px;
   box-sizing: border-box;
+  overflow: auto;
 }
 
 .a-comment-list {
@@ -1381,6 +1428,8 @@ body.is-horizontal .action-footer {
 .card-canvas.exporting .chip-add-btn,
 .card-canvas.exporting .floating-img-controls,
 .card-canvas.exporting .img-resize-handle,
+.card-canvas.exporting .img-rotate-handle,
+.card-canvas.exporting .a-module-resize-handle,
 .card-canvas.exporting .dropdown-editor-wrap,
 .card-canvas.exporting .qa-dropdown-select,
 .card-canvas.exporting .th-del-action,

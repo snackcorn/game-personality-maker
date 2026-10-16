@@ -1,6 +1,6 @@
 import { LayerManager } from './layerManager.js';
 import { generateCode, parseCode } from './storage.js';
-import { exportCardAsPNG } from './export.js';
+import { createCardPreview, exportCardAsPNG } from './export.js';
 
 const state = {
   layout: 'A',
@@ -8,6 +8,10 @@ const state = {
   showAComment: true,
   tableFitFill: false,
   tableWidthPercent: 55,
+  aModuleSizes: {
+    table: { width: null, height: null },
+    comment: { width: null, height: null }
+  },
   tableBg: true,
   profileSize: 'normal',
   bInputScale: 'normal',
@@ -76,6 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupACommentToggle();
   setupACommentComponent();
   setupTableResizer();
+  setupAModuleResizers();
   setupTableFitToggle();
   setupTableBgControl();
   setupTheme();
@@ -93,62 +98,55 @@ document.addEventListener('DOMContentLoaded', () => {
   applyProfileLayout();
 });
 
-// 편집 카드와 같은 DOM을 내보내기 스타일로 복제해 우측에 실시간 미리보기로 표시한다.
+// 내보내기와 같은 렌더링 결과를 이미지로 만들어 우측에 표시한다.
 function setupLivePreview() {
   const source = document.getElementById('export-card');
   const stage = document.getElementById('preview-stage');
-  const viewport = document.getElementById('preview-viewport');
-  if (!source || !stage || !viewport) return;
+  if (!source || !stage) return;
 
-  let queued = false;
-  const renderPreview = () => {
-    queued = false;
-    const sourceWidth = source.getBoundingClientRect().width;
-    if (!sourceWidth) return;
-
-    const clone = source.cloneNode(true);
-    clone.id = 'preview-card';
-    clone.classList.add('exporting', 'preview-card');
-    clone.style.width = `${sourceWidth}px`;
-    clone.style.maxWidth = 'none';
-    clone.setAttribute('aria-hidden', 'true');
-
-    // cloneNode는 브라우저별로 현재 입력값을 놓칠 수 있어 명시적으로 동기화한다.
-    const sourceFields = source.querySelectorAll('input, textarea, select');
-    const previewFields = clone.querySelectorAll('input, textarea, select');
-    sourceFields.forEach((field, index) => {
-      const previewField = previewFields[index];
-      if (!previewField) return;
-      previewField.value = field.value;
-      if ('checked' in field) previewField.checked = field.checked;
-      if (field.tagName === 'SELECT') previewField.selectedIndex = field.selectedIndex;
-    });
-    stage.replaceChildren(clone);
-
-    requestAnimationFrame(() => {
-      const scale = Math.min(1, viewport.clientWidth / sourceWidth);
-      clone.style.transform = `scale(${scale})`;
-      stage.style.height = `${clone.offsetHeight * scale}px`;
-    });
+  let timerId = null;
+  let rendering = false;
+  let rerenderNeeded = false;
+  const renderPreview = async () => {
+    if (rendering) {
+      rerenderNeeded = true;
+      return;
+    }
+    rendering = true;
+    try {
+      const imageUrl = await createCardPreview('export-card');
+      if (!imageUrl) return;
+      const image = new Image();
+      image.className = 'preview-image';
+      image.alt = '완성 이미지 미리보기';
+      image.src = imageUrl;
+      stage.replaceChildren(image);
+    } catch (error) {
+      console.error('Preview render failed:', error);
+    } finally {
+      rendering = false;
+      if (rerenderNeeded) {
+        rerenderNeeded = false;
+        schedulePreview();
+      }
+    }
   };
   const schedulePreview = () => {
-    if (!queued) {
-      queued = true;
-      requestAnimationFrame(renderPreview);
-    }
+    window.clearTimeout(timerId);
+    timerId = window.setTimeout(renderPreview, 120);
   };
 
   document.addEventListener('input', schedulePreview, true);
   document.addEventListener('change', schedulePreview, true);
+  document.addEventListener('click', schedulePreview, true);
   new MutationObserver(schedulePreview).observe(source, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['class', 'style', 'src', 'checked', 'selected']
+    attributeFilter: ['style', 'src', 'checked', 'selected']
   });
   new ResizeObserver(schedulePreview).observe(source);
-  new ResizeObserver(schedulePreview).observe(viewport);
-  renderPreview();
+  schedulePreview();
 }
 
 // 1. 개인정보 보호 팝업
@@ -219,6 +217,7 @@ function applyOrientation(orient) {
   // 표 너비 리사이즈 값은 가로 모드 전용이다. 세로 모드에서는 100% 폭을 사용한다.
   const tableWrap = document.getElementById('mod-table');
   if (tableWrap) tableWrap.style.width = isH ? `${state.tableWidthPercent}%` : '';
+  applyAModuleSizes();
 }
 
 function setupLayoutSwitch() {
@@ -509,6 +508,70 @@ function setupTableResizer() {
     if (isResizing) {
       isResizing = false;
       document.body.style.cursor = 'default';
+    }
+  });
+}
+
+// A 타입 내부 모듈을 직접 조절한다. 세로 모드는 폭·높이, 가로 모드는 높이를 조절한다.
+function setupAModuleResizers() {
+  const container = document.getElementById('a-container');
+  if (!container) return;
+
+  container.querySelectorAll('.a-module-resize-handle').forEach(handle => {
+    const module = handle.closest('.inner-module');
+    const key = module?.id === 'mod-table' ? 'table' : 'comment';
+    if (!module || !key) return;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startRect = module.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const minWidth = key === 'table' ? 320 : 240;
+      const minHeight = key === 'table' ? 180 : 150;
+      const isHorizontal = state.orientation === 'H';
+
+      const onMouseMove = (moveEvt) => {
+        if (!isHorizontal) {
+          const widthPx = Math.max(minWidth, Math.min(containerRect.width, startRect.width + moveEvt.clientX - startX));
+          const width = Math.round((widthPx / containerRect.width) * 1000) / 10;
+          state.aModuleSizes[key].width = width;
+          module.style.width = `${width}%`;
+        }
+
+        const height = Math.max(minHeight, Math.min(1200, startRect.height + moveEvt.clientY - startY));
+        state.aModuleSizes[key].height = Math.round(height);
+        module.style.height = `${state.aModuleSizes[key].height}px`;
+        module.style.flex = 'none';
+        module.style.alignSelf = 'flex-start';
+      };
+      const onMouseUp = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    });
+  });
+}
+
+function applyAModuleSizes() {
+  const sizes = state.aModuleSizes;
+  [['table', 'mod-table'], ['comment', 'mod-comment']].forEach(([key, id]) => {
+    const module = document.getElementById(id);
+    const size = sizes[key];
+    if (!module || !size) return;
+    if (state.orientation !== 'H' && Number.isFinite(size.width)) {
+      module.style.width = `${size.width}%`;
+    } else if (state.orientation === 'H' && key === 'comment') {
+      module.style.width = '';
+    }
+    if (Number.isFinite(size.height)) {
+      module.style.height = `${size.height}px`;
+      module.style.flex = 'none';
+      module.style.alignSelf = 'flex-start';
     }
   });
 }
@@ -1192,6 +1255,7 @@ function setupShareCode() {
       showAComment: state.showAComment,
       tableFitFill: state.tableFitFill,
       tableWidthPercent: state.tableWidthPercent,
+      aModuleSizes: state.aModuleSizes,
       tableBg: state.tableBg,
       profileSize: state.profileSize,
       bInputScale: state.bInputScale,
@@ -1291,6 +1355,18 @@ function setupShareCode() {
         state.tableWidthPercent = data.tableWidthPercent;
         const tableWrap = document.getElementById('mod-table');
         if (tableWrap && state.orientation === 'H') tableWrap.style.width = `${data.tableWidthPercent}%`;
+      }
+
+      if (data.aModuleSizes && typeof data.aModuleSizes === 'object') {
+        ['table', 'comment'].forEach(key => {
+          const size = data.aModuleSizes[key];
+          if (!size || typeof size !== 'object') return;
+          state.aModuleSizes[key] = {
+            width: Number.isFinite(size.width) ? size.width : null,
+            height: Number.isFinite(size.height) ? size.height : null
+          };
+        });
+        applyAModuleSizes();
       }
 
       if (data.tableFitFill !== undefined) {

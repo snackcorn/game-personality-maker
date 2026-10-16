@@ -41,6 +41,7 @@ export class LayerManager {
       </div>
       <img src="${itemData.src}" alt="스티커" />
       <div class="img-resize-handle"></div>
+      <div class="img-rotate-handle" title="드래그하여 회전"></div>
     `;
 
     el.addEventListener('mousedown', () => {
@@ -101,8 +102,34 @@ export class LayerManager {
       window.addEventListener('mouseup', onMouseUp);
     };
 
+    const rotateHandle = el.querySelector('.img-rotate-handle');
+    rotateHandle.onmousedown = (e) => {
+      e.stopPropagation();
+      const rect = el.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+      const startRotation = itemData.rotation;
+
+      const onMouseMove = (moveEvt) => {
+        const currentAngle = Math.atan2(moveEvt.clientY - centerY, moveEvt.clientX - centerX);
+        const degrees = (currentAngle - startAngle) * (180 / Math.PI);
+        // 5도 단위로 보정해 미세한 흔들림 없이 회전한다.
+        itemData.rotation = Math.round((startRotation + degrees) / 5) * 5;
+        this.applyTransform(el, itemData);
+      };
+
+      const onMouseUp = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    };
+
     el.onmousedown = (e) => {
-      if (e.target.tagName === 'BUTTON' || e.target.classList.contains('img-resize-handle')) return;
+      if (e.target.tagName === 'BUTTON' || e.target.classList.contains('img-resize-handle') || e.target.classList.contains('img-rotate-handle')) return;
       const rect = el.getBoundingClientRect();
       const startX = e.clientX - rect.left;
       const startY = e.clientY - rect.top;

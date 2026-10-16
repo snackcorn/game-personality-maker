@@ -44,7 +44,7 @@ js/
 현재 발급되는 데이터에는 다음이 포함됩니다.
 
 ```text
-layout, orientation, showAComment, tableFitFill, tableWidthPercent, tableBg
+layout, orientation, showAComment, tableFitFill, tableWidthPercent, aModuleSizes, tableBg
 profileSize, bInputScale, profilePos, profileDivider, profileBg, metaFields
 aCommentList, customColors, theme, avatarDataUrl, bgDataUrl
 matrixRows, tableLabels, qaList, stickers

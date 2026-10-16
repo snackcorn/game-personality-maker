@@ -535,6 +535,7 @@ function setupAModuleResizers() {
     handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      module.classList.add('is-resizing');
       const startX = e.clientX;
       const startY = e.clientY;
       const startRect = module.getBoundingClientRect();
@@ -561,6 +562,7 @@ function setupAModuleResizers() {
         applyAModuleContentScale(module, nextScale);
       };
       const onMouseUp = () => {
+        module.classList.remove('is-resizing');
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
       };

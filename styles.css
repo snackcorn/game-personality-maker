@@ -363,6 +363,8 @@ body.is-horizontal .toolbar-row {
 }
 .editor-pane .card-canvas {
   max-width: none;
+  /* 모듈 바깥쪽에 배치한 크기 조절 핸들을 편집 중에도 사용할 수 있게 한다. */
+  overflow: visible;
 }
 .workspace-heading {
   margin: 0 0 10px;
@@ -990,26 +992,67 @@ body.is-horizontal .toolbar-row {
   border-radius: 12px;
   padding: 12px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 .a-module-content-scale {
   transform-origin: top left;
+  min-width: 0;
 }
 .a-module-resize-handle {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  width: 14px;
-  height: 14px;
+  /* 모듈 모서리와 겹치지 않도록 바깥쪽에 별도 배치한다. */
+  right: -26px;
+  bottom: -26px;
+  width: 18px;
+  height: 18px;
   border: 2px solid #fff;
   border-radius: 3px;
   background: var(--accent);
   cursor: nwse-resize;
   display: none;
   z-index: 30;
+  pointer-events: auto;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.42);
 }
-.inner-module:hover .a-module-resize-handle {
+.inner-module:hover .a-module-resize-handle,
+.inner-module.is-resizing .a-module-resize-handle {
   display: block;
+}
+.inner-module {
+  container-type: inline-size;
+}
+
+/* 모듈 폭이 좁아질 때 카드 컨트롤을 줄바꿈해 사용성을 유지한다. */
+@container (max-width: 460px) {
+  .a-module-content-scale .qa-card-item {
+    padding: 8px;
+  }
+  .a-module-content-scale .qa-top-row {
+    flex-wrap: wrap !important;
+    gap: 5px !important;
+  }
+  .a-module-content-scale .oval-title-input {
+    flex: 1 1 calc(100% - 32px) !important;
+  }
+  .a-module-content-scale .qa-control-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .a-module-content-scale .type-selector {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@container (max-width: 360px) {
+  .a-module-content-scale .qa-control-actions {
+    justify-content: stretch;
+  }
+  .a-module-content-scale .btn-del-qa {
+    flex: 0 0 34px;
+    min-height: 28px;
+  }
 }
 
 .card-canvas.horizontal-mode .layout-a-table-wrap {
@@ -1170,7 +1213,8 @@ body.is-horizontal .toolbar-row {
   flex-shrink: 0;
 }
 .layout-a-table-wrap {
-  overflow-x: auto;
+  /* 모듈 밖 오른쪽 아래의 리사이즈 핸들이 잘리지 않도록 한다. */
+  overflow: visible;
 }
 
 .editable-cell-th, .editable-cell-td {
@@ -1227,7 +1271,7 @@ body.is-horizontal .toolbar-row {
   flex-direction: column !important;
   gap: 10px;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .a-comment-list {

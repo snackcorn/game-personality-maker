@@ -80,6 +80,9 @@
       <button type="button" id="btn-clear-images" class="btn-ui btn-danger">
         🗑️ 스티커 전체 삭제
       </button>
+      <button type="button" id="btn-reset-module-sizes" class="btn-ui" title="A 타입 표와 자유 입력창 크기를 기본값으로 복원">
+        ↺ 전체 사이즈 초기화
+      </button>
     </div>
   </section>
 
@@ -137,6 +140,13 @@
           <div class="layout-a-table-wrap inner-module has-bg" id="mod-table">
             <div class="module-drag-bar" title="드래그하여 코멘트창과 좌우/상하 변경">
               <span class="drag-handle-icon">⠿ 표 위치 변경</span>
+              <button type="button" class="a-module-size-toggle" aria-expanded="false">↗ 크기 조절</button>
+            </div>
+            <div class="a-module-size-controls" aria-hidden="true">
+              <label class="a-module-width-control">폭 <input type="range" class="a-module-size-range" data-dimension="width" min="40" max="100" step="1" /></label>
+              <label>높이 <input type="range" class="a-module-size-range" data-dimension="height" min="180" max="1200" step="10" /></label>
+              <span class="a-module-size-limit"></span>
+              <button type="button" class="a-module-size-reset">초기화</button>
             </div>
 
             <!-- 체크리스트 배경 토글 호버 툴바 -->
@@ -157,7 +167,6 @@
               <tbody id="matrix-table-body"></tbody>
             </table>
             <button type="button" id="btn-add-table-row" class="btn-add-table-row">+ 체크 항목 추가</button>
-            <div class="a-module-resize-handle" title="드래그하여 모듈 크기 조절"></div>
           </div>
 
           <!-- 리사이즈 구분선 (중앙선) -->
@@ -169,10 +178,16 @@
           <div class="layout-a-comment-wrap inner-module" id="mod-comment">
             <div class="module-drag-bar" title="드래그하여 표와 좌우/상하 변경">
               <span class="drag-handle-icon">⠿ 자유 입력창 위치 변경</span>
+              <button type="button" class="a-module-size-toggle" aria-expanded="false">↗ 크기 조절</button>
+            </div>
+            <div class="a-module-size-controls" aria-hidden="true">
+              <label class="a-module-width-control">폭 <input type="range" class="a-module-size-range" data-dimension="width" min="40" max="100" step="1" /></label>
+              <label>높이 <input type="range" class="a-module-size-range" data-dimension="height" min="150" max="1200" step="10" /></label>
+              <span class="a-module-size-limit"></span>
+              <button type="button" class="a-module-size-reset">초기화</button>
             </div>
             <div id="a-comment-container" class="a-comment-list"></div>
             <button type="button" id="btn-add-a-comment" class="btn-add-card">+ 창 추가</button>
-            <div class="a-module-resize-handle" title="드래그하여 모듈 크기 조절"></div>
           </div>
 
         </div>

@@ -20,7 +20,8 @@ export async function createCardPreview(cardElementId) {
 
   await waitForCardImages(cardEl);
   const canvas = await html2canvas(cardEl, {
-    scale: 1,
+    // 화면에서는 축소해 보여도 원본 픽셀을 충분히 확보해 글자와 선을 선명하게 유지한다.
+    scale: Math.max(2, window.devicePixelRatio || 1),
     useCORS: true,
     backgroundColor: null,
     logging: false,

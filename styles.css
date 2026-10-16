@@ -983,6 +983,8 @@ body.is-horizontal .toolbar-row {
 
 .layout-a-table-wrap {
   width: 100%;
+  min-width: 320px;
+  min-height: 180px;
   position: relative;
   transition: all 0.2s ease;
   border-radius: 12px;
@@ -990,21 +992,57 @@ body.is-horizontal .toolbar-row {
   box-sizing: border-box;
   overflow: auto;
 }
-.a-module-resize-handle {
-  position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 14px;
-  height: 14px;
-  border: 2px solid #fff;
-  border-radius: 3px;
-  background: var(--accent);
-  cursor: nwse-resize;
-  display: none;
-  z-index: 20;
+.a-module-size-toggle {
+  margin-left: 6px;
+  padding: 2px 7px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.7rem;
 }
-.inner-module:hover .a-module-resize-handle {
-  display: block;
+.a-module-size-controls {
+  position: absolute;
+  top: 34px;
+  right: 12px;
+  z-index: 30;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  background: rgba(15, 23, 42, 0.97);
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.45);
+  font-size: 0.72rem;
+  color: var(--subtext);
+}
+.inner-module.is-resizing .a-module-size-controls {
+  display: flex;
+}
+.a-module-size-controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.a-module-size-controls input[type="range"] {
+  width: 72px;
+  accent-color: var(--accent);
+}
+.a-module-size-limit {
+  color: var(--subtext);
+  white-space: nowrap;
+  font-size: 0.66rem;
+}
+.a-module-size-controls button {
+  padding: 3px 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.7rem;
 }
 
 .card-canvas.horizontal-mode .layout-a-table-wrap {
@@ -1216,6 +1254,7 @@ body.is-horizontal .toolbar-row {
   padding: 12px;
   flex: 1;
   min-width: 240px;
+  min-height: 150px;
   width: 100%;
   display: flex !important;
   flex-direction: column !important;
@@ -1429,7 +1468,8 @@ body.is-horizontal .action-footer {
 .card-canvas.exporting .floating-img-controls,
 .card-canvas.exporting .img-resize-handle,
 .card-canvas.exporting .img-rotate-handle,
-.card-canvas.exporting .a-module-resize-handle,
+.card-canvas.exporting .a-module-size-toggle,
+.card-canvas.exporting .a-module-size-controls,
 .card-canvas.exporting .dropdown-editor-wrap,
 .card-canvas.exporting .qa-dropdown-select,
 .card-canvas.exporting .th-del-action,

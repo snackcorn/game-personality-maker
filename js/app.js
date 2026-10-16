@@ -2,6 +2,11 @@ import { LayerManager } from './layerManager.js';
 import { generateCode, parseCode } from './storage.js';
 import { createCardPreview, exportCardAsPNG } from './export.js';
 
+const A_MODULE_SIZE_LIMITS = {
+  table: { minWidth: 320, minHeight: 180 },
+  comment: { minWidth: 240, minHeight: 150 }
+};
+
 const state = {
   layout: 'A',
   orientation: 'V',
@@ -81,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupACommentComponent();
   setupTableResizer();
   setupAModuleResizers();
+  setupModuleSizeReset();
   setupTableFitToggle();
   setupTableBgControl();
   setupTheme();
@@ -180,6 +186,7 @@ function applyLayout(mode) {
   const toolAComment = document.getElementById('tool-a-comment-wrap');
   const toolAFit = document.getElementById('tool-a-fit-wrap');
   const toolBScale = document.getElementById('tool-b-scale-wrap');
+  const btnResetModuleSizes = document.getElementById('btn-reset-module-sizes');
 
   const isA = (mode === 'A');
 
@@ -192,6 +199,7 @@ function applyLayout(mode) {
   if (toolAComment) toolAComment.style.display = isA ? 'inline-flex' : 'none';
   if (toolAFit) toolAFit.style.display = isA ? 'inline-flex' : 'none';
   if (toolBScale) toolBScale.style.display = isA ? 'none' : 'inline-flex';
+  if (btnResetModuleSizes) btnResetModuleSizes.style.display = isA ? 'inline-flex' : 'none';
 
   const resizer = document.getElementById('a-resizer');
   if (resizer) {
@@ -517,43 +525,87 @@ function setupAModuleResizers() {
   const container = document.getElementById('a-container');
   if (!container) return;
 
-  container.querySelectorAll('.a-module-resize-handle').forEach(handle => {
-    const module = handle.closest('.inner-module');
+  container.querySelectorAll('.inner-module').forEach(module => {
     const key = module?.id === 'mod-table' ? 'table' : 'comment';
     if (!module || !key) return;
+    const toggle = module.querySelector('.a-module-size-toggle');
+    const controls = module.querySelector('.a-module-size-controls');
+    const reset = module.querySelector('.a-module-size-reset');
+    const limits = A_MODULE_SIZE_LIMITS[key];
+    if (!toggle || !controls || !reset) return;
 
-    handle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const startX = e.clientX;
-      const startY = e.clientY;
-      const startRect = module.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      const minWidth = key === 'table' ? 320 : 240;
-      const minHeight = key === 'table' ? 180 : 150;
+    toggle.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    const syncControls = () => {
+      const containerWidth = container.getBoundingClientRect().width || 1;
+      const rect = module.getBoundingClientRect();
+      const widthInput = controls.querySelector('[data-dimension="width"]');
+      const heightInput = controls.querySelector('[data-dimension="height"]');
+      const limitText = controls.querySelector('.a-module-size-limit');
       const isHorizontal = state.orientation === 'H';
+      if (widthInput) {
+        widthInput.min = Math.min(100, Math.ceil((limits.minWidth / containerWidth) * 100));
+        widthInput.value = Math.round(state.aModuleSizes[key].width ?? (rect.width / containerWidth * 100));
+        widthInput.closest('.a-module-width-control').hidden = isHorizontal;
+      }
+      if (heightInput) heightInput.value = Math.round(state.aModuleSizes[key].height ?? rect.height);
+      if (limitText) limitText.textContent = `최소 ${limits.minWidth}×${limits.minHeight}px`;
+    };
 
-      const onMouseMove = (moveEvt) => {
-        if (!isHorizontal) {
-          const widthPx = Math.max(minWidth, Math.min(containerRect.width, startRect.width + moveEvt.clientX - startX));
-          const width = Math.round((widthPx / containerRect.width) * 1000) / 10;
-          state.aModuleSizes[key].width = width;
-          module.style.width = `${width}%`;
-        }
-
-        const height = Math.max(minHeight, Math.min(1200, startRect.height + moveEvt.clientY - startY));
-        state.aModuleSizes[key].height = Math.round(height);
-        module.style.height = `${state.aModuleSizes[key].height}px`;
-        module.style.flex = 'none';
-        module.style.alignSelf = 'flex-start';
-      };
-      const onMouseUp = () => {
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onMouseUp);
-      };
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const active = module.classList.toggle('is-resizing');
+      toggle.setAttribute('aria-expanded', String(active));
+      controls.setAttribute('aria-hidden', String(!active));
+      if (active) syncControls();
     });
+
+    controls.querySelectorAll('.a-module-size-range').forEach(input => {
+      input.addEventListener('input', () => {
+        const value = Number(input.value);
+        if (input.dataset.dimension === 'width' && state.orientation !== 'H') {
+          const minWidth = (limits.minWidth / (container.getBoundingClientRect().width || 1)) * 100;
+          state.aModuleSizes[key].width = Math.max(minWidth, value);
+          module.style.width = `${state.aModuleSizes[key].width}%`;
+        }
+        if (input.dataset.dimension === 'height') {
+          state.aModuleSizes[key].height = Math.max(limits.minHeight, value);
+          module.style.height = `${value}px`;
+          module.style.flex = 'none';
+          module.style.alignSelf = 'flex-start';
+        }
+      });
+    });
+
+    reset.addEventListener('click', () => {
+      state.aModuleSizes[key] = { width: null, height: null };
+      module.style.height = '';
+      module.style.flex = '';
+      module.style.alignSelf = '';
+      if (key === 'comment') module.style.width = '';
+      applyOrientation(state.orientation);
+      syncControls();
+    });
+  });
+}
+
+function setupModuleSizeReset() {
+  const button = document.getElementById('btn-reset-module-sizes');
+  if (!button) return;
+  button.addEventListener('click', () => {
+    state.aModuleSizes = {
+      table: { width: null, height: null },
+      comment: { width: null, height: null }
+    };
+    ['mod-table', 'mod-comment'].forEach(id => {
+      const module = document.getElementById(id);
+      if (!module) return;
+      module.style.width = '';
+      module.style.height = '';
+      module.style.flex = '';
+      module.style.alignSelf = '';
+    });
+    applyOrientation(state.orientation);
   });
 }
 

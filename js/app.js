@@ -14,8 +14,8 @@ const state = {
   tableFitFill: false,
   tableWidthPercent: 55,
   aModuleSizes: {
-    table: { width: null, height: null },
-    comment: { width: null, height: null }
+    table: { width: null, height: null, scale: 1 },
+    comment: { width: null, height: null, scale: 1 }
   },
   tableBg: true,
   profileSize: 'normal',
@@ -520,7 +520,7 @@ function setupTableResizer() {
   });
 }
 
-// A 타입 내부 모듈을 직접 조절한다. 세로 모드는 폭·높이, 가로 모드는 높이를 조절한다.
+// A 타입 모듈은 모서리 핸들로 조절하며, 내용도 함께 비율 축소한다.
 function setupAModuleResizers() {
   const container = document.getElementById('a-container');
   if (!container) return;
@@ -528,65 +528,54 @@ function setupAModuleResizers() {
   container.querySelectorAll('.inner-module').forEach(module => {
     const key = module?.id === 'mod-table' ? 'table' : 'comment';
     if (!module || !key) return;
-    const toggle = module.querySelector('.a-module-size-toggle');
-    const controls = module.querySelector('.a-module-size-controls');
-    const reset = module.querySelector('.a-module-size-reset');
+    const handle = module.querySelector('.a-module-resize-handle');
     const limits = A_MODULE_SIZE_LIMITS[key];
-    if (!toggle || !controls || !reset) return;
+    if (!handle) return;
 
-    toggle.addEventListener('mousedown', (e) => e.stopPropagation());
-
-    const syncControls = () => {
-      const containerWidth = container.getBoundingClientRect().width || 1;
-      const rect = module.getBoundingClientRect();
-      const widthInput = controls.querySelector('[data-dimension="width"]');
-      const heightInput = controls.querySelector('[data-dimension="height"]');
-      const limitText = controls.querySelector('.a-module-size-limit');
-      const isHorizontal = state.orientation === 'H';
-      if (widthInput) {
-        widthInput.min = Math.min(100, Math.ceil((limits.minWidth / containerWidth) * 100));
-        widthInput.value = Math.round(state.aModuleSizes[key].width ?? (rect.width / containerWidth * 100));
-        widthInput.closest('.a-module-width-control').hidden = isHorizontal;
-      }
-      if (heightInput) heightInput.value = Math.round(state.aModuleSizes[key].height ?? rect.height);
-      if (limitText) limitText.textContent = `최소 ${limits.minWidth}×${limits.minHeight}px`;
-    };
-
-    toggle.addEventListener('click', (e) => {
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      const active = module.classList.toggle('is-resizing');
-      toggle.setAttribute('aria-expanded', String(active));
-      controls.setAttribute('aria-hidden', String(!active));
-      if (active) syncControls();
-    });
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startRect = module.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const startScale = state.aModuleSizes[key].scale ?? 1;
+      const isHorizontal = state.orientation === 'H';
 
-    controls.querySelectorAll('.a-module-size-range').forEach(input => {
-      input.addEventListener('input', () => {
-        const value = Number(input.value);
-        if (input.dataset.dimension === 'width' && state.orientation !== 'H') {
-          const minWidth = (limits.minWidth / (container.getBoundingClientRect().width || 1)) * 100;
-          state.aModuleSizes[key].width = Math.max(minWidth, value);
+      const onMouseMove = (moveEvt) => {
+        const widthPx = isHorizontal
+          ? startRect.width
+          : Math.max(limits.minWidth, Math.min(containerRect.width, startRect.width + moveEvt.clientX - startX));
+        const heightPx = Math.max(limits.minHeight, Math.min(1200, startRect.height + moveEvt.clientY - startY));
+        const nextScale = Math.min(1, startScale * Math.min(widthPx / startRect.width, heightPx / startRect.height));
+
+        if (!isHorizontal) {
+          state.aModuleSizes[key].width = Math.round((widthPx / containerRect.width) * 1000) / 10;
           module.style.width = `${state.aModuleSizes[key].width}%`;
         }
-        if (input.dataset.dimension === 'height') {
-          state.aModuleSizes[key].height = Math.max(limits.minHeight, value);
-          module.style.height = `${value}px`;
-          module.style.flex = 'none';
-          module.style.alignSelf = 'flex-start';
-        }
-      });
-    });
-
-    reset.addEventListener('click', () => {
-      state.aModuleSizes[key] = { width: null, height: null };
-      module.style.height = '';
-      module.style.flex = '';
-      module.style.alignSelf = '';
-      if (key === 'comment') module.style.width = '';
-      applyOrientation(state.orientation);
-      syncControls();
+        state.aModuleSizes[key].height = Math.round(heightPx);
+        state.aModuleSizes[key].scale = nextScale;
+        module.style.height = `${state.aModuleSizes[key].height}px`;
+        module.style.flex = 'none';
+        module.style.alignSelf = 'flex-start';
+        applyAModuleContentScale(module, nextScale);
+      };
+      const onMouseUp = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
     });
   });
+}
+
+function applyAModuleContentScale(module, scale = 1) {
+  const content = module.querySelector('.a-module-content-scale');
+  if (!content) return;
+  content.style.transform = `scale(${scale})`;
+  content.style.transformOrigin = 'top left';
+  content.style.width = `${100 / scale}%`;
 }
 
 function setupModuleSizeReset() {
@@ -594,8 +583,8 @@ function setupModuleSizeReset() {
   if (!button) return;
   button.addEventListener('click', () => {
     state.aModuleSizes = {
-      table: { width: null, height: null },
-      comment: { width: null, height: null }
+      table: { width: null, height: null, scale: 1 },
+      comment: { width: null, height: null, scale: 1 }
     };
     ['mod-table', 'mod-comment'].forEach(id => {
       const module = document.getElementById(id);
@@ -604,6 +593,7 @@ function setupModuleSizeReset() {
       module.style.height = '';
       module.style.flex = '';
       module.style.alignSelf = '';
+      applyAModuleContentScale(module, 1);
     });
     applyOrientation(state.orientation);
   });
@@ -625,6 +615,7 @@ function applyAModuleSizes() {
       module.style.flex = 'none';
       module.style.alignSelf = 'flex-start';
     }
+    applyAModuleContentScale(module, Number.isFinite(size.scale) ? size.scale : 1);
   });
 }
 
@@ -1415,7 +1406,8 @@ function setupShareCode() {
           if (!size || typeof size !== 'object') return;
           state.aModuleSizes[key] = {
             width: Number.isFinite(size.width) ? size.width : null,
-            height: Number.isFinite(size.height) ? size.height : null
+            height: Number.isFinite(size.height) ? size.height : null,
+            scale: Number.isFinite(size.scale) ? size.scale : 1
           };
         });
         applyAModuleSizes();

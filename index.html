@@ -12,7 +12,7 @@
   <header>
     <h1>🎮 멀티/협동게임 성향표 생성기</h1>
     <p>성향표를 자유롭게 커스텀하고 식별코드로 공유하거나 고화질 이미지로 저장하세요.</p>
-    <p class="app-version" aria-label="현재 버전">v<span id="app-version">1.0.0</span></p>
+    <p class="app-version" aria-label="현재 버전">v<span id="app-version">1.0.2</span></p>
   </header>
 
   <!-- 상단: 식별코드 공유 패널 -->
@@ -89,8 +89,8 @@
       <button type="button" id="btn-reset-module-sizes" class="btn-ui" title="A 타입 표와 자유 입력창 크기를 기본값으로 복원">
         ↺ 전체 사이즈 초기화
       </button>
-      <button type="button" id="btn-fit-modules-to-card" class="btn-ui" title="A 타입 모듈을 카드 배경 안쪽으로 맞춤">
-        ↕ 모듈 배경 맞춤
+      <button type="button" id="btn-fit-modules-to-card" class="btn-ui" title="A 타입 모듈을 고정된 카드 배경 안쪽으로 맞춤">
+        ↕ 모듈을 배경에 맞춤
       </button>
     </div>
   </section>
@@ -203,6 +203,7 @@
       <section class="layout-view draggable-module" id="layout-b" style="display: none;">
         <div class="module-drag-bar" title="드래그하여 위치 변경">
           <span class="drag-handle-icon">⠿ Q&A 카드 리스트 블록</span>
+          <button type="button" id="btn-b-center-line" class="btn-module-fit" aria-pressed="false" title="가로형 카드 사이에 중앙 구분선을 표시합니다">＋ 중앙선</button>
         </div>
         <div id="qa-container" class="qa-list"></div>
         <button type="button" id="btn-add-qa" class="btn-add-card">+ 질문 항목 추가</button>

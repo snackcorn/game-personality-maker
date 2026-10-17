@@ -342,9 +342,11 @@ body.is-horizontal .toolbar-row {
    캔버스 컨테이너 & 레이어
    ========================================= */
 .card-canvas {
+  /* 모듈 크기와 독립적인 배경 기준 높이. 배경 맞춤은 이 값을 사용한다. */
+  --background-fit-height: 580px;
   width: 100%;
   max-width: 780px;
-  min-height: 580px;
+  min-height: var(--background-fit-height);
   background-color: var(--canvas-bg) !important;
   border: 2px solid var(--border);
   border-radius: 16px;
@@ -358,7 +360,7 @@ body.is-horizontal .toolbar-row {
 
 .card-canvas.horizontal-mode {
   max-width: 1040px;
-  min-height: 580px;
+  min-height: var(--background-fit-height);
   height: auto;
   overflow: visible;
 }
@@ -1116,6 +1118,9 @@ body.is-horizontal .toolbar-row {
   pointer-events: auto;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.42);
 }
+.card-canvas.horizontal-mode .a-module-resize-handle {
+  cursor: ns-resize;
+}
 .inner-module.resize-enabled .a-module-resize-handle,
 .inner-module.is-resizing .a-module-resize-handle {
   display: block;
@@ -1508,7 +1513,25 @@ body.is-horizontal .toolbar-row {
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+  position: relative;
 }
+
+/* B 타입 중앙선은 실제 카드의 간격 중앙에만 그려서 2·3·4개 이상 모두 대응한다. */
+.b-center-divider-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.b-center-divider {
+  position: absolute;
+  background: var(--accent);
+  border-radius: 999px;
+  opacity: 0.9;
+  box-shadow: 0 0 5px var(--accent);
+}
+.b-center-divider.is-vertical { width: 2px; }
+.b-center-divider.is-horizontal { height: 2px; }
 
 .card-canvas.horizontal-mode #qa-container {
   display: grid;
@@ -1549,7 +1572,8 @@ body.is-horizontal .toolbar-row {
   max-width: 100%;
 }
 
-.card-canvas.horizontal-mode #qa-container .qa-card-item:last-child:nth-child(odd) {
+/* 홀수(3·5·…) 장은 첫 카드를 전체 폭으로 두고 나머지를 2열로 배치한다. */
+.card-canvas.horizontal-mode #qa-container .qa-card-item:first-child:nth-last-child(odd) {
   grid-column: 1 / -1;
 }
 
@@ -1742,6 +1766,7 @@ body.is-horizontal .action-footer {
 .card-canvas.exporting .module-drag-bar,
 .card-canvas.exporting .btn-module-resize,
 .card-canvas.exporting .btn-module-fit,
+.card-canvas.exporting #btn-b-center-line,
 .card-canvas.exporting .profile-toolbar,
 .card-canvas.exporting .table-hover-toolbar,
 .card-canvas.exporting .btn-del-meta,
@@ -1793,6 +1818,11 @@ body.is-horizontal .action-footer {
   height: auto !important;
   overflow: visible !important;
 }
+.card-canvas.module-fit-locked {
+  /* 배경 맞춤은 카드 배경을 늘리지 않고, 내부 모듈만 기준 높이에 맞춘다. */
+  min-height: var(--background-fit-height);
+  overflow: hidden !important;
+}
 
 /* 휴대폰에서는 작업 도구와 캔버스를 화면 폭 안에서 우선 배치한다. */
 @media (max-width: 700px) {
@@ -1832,7 +1862,7 @@ body.is-horizontal .action-footer {
     max-width: 48px !important;
   }
   .card-canvas.horizontal-mode #qa-container { grid-template-columns: minmax(0, 1fr); }
-  .card-canvas.horizontal-mode #qa-container .qa-card-item:last-child:nth-child(odd) { grid-column: auto; }
+  .card-canvas.horizontal-mode #qa-container .qa-card-item:first-child:nth-last-child(odd) { grid-column: auto; }
   .action-footer { margin-top: 16px; }
 }
 

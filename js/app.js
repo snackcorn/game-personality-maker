@@ -3,7 +3,7 @@ import { generateCode, parseCode } from './storage.js';
 import { createCardPreview, exportCardAsPNG } from './export.js';
 
 // 기능 수정 시 이 번호를 올리면 페이지 상단 표기도 함께 갱신된다.
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.2';
 
 const A_MODULE_SIZE_LIMITS = {
   table: { minWidth: 320, minHeight: 180 },
@@ -23,6 +23,7 @@ const state = {
   tableBg: true,
   profileSize: 'normal',
   bInputScale: 'normal',
+  bCenterLine: false,
   theme: 'cyber',
   
   customColors: {
@@ -102,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupUploads();
   setupMatrixTable();
   setupQAComponent();
+  setupBCenterLineControl();
   setupModuleDragAndDrop();
   setupShareCode();
   setupLivePreview();
@@ -219,6 +221,7 @@ function applyLayout(mode) {
     resizer.style.display = (isA && state.showAComment && state.orientation === 'H') ? 'flex' : 'none';
   }
   if (isA) window.requestAnimationFrame(applyACommentContentFit);
+  window.requestAnimationFrame(scheduleBCenterDividers);
 }
 
 // 3. 가로/세로 방향 전환
@@ -260,6 +263,9 @@ function applyOrientation(orient, preserveModuleSizes = false) {
   const tableWrap = document.getElementById('mod-table');
   if (tableWrap) tableWrap.style.width = isH ? `${state.tableWidthPercent}%` : '';
   applyAModuleSizes();
+  scheduleBCenterDividers();
+  // 배경 맞춤을 사용 중인 상태에서 가로/세로를 바꿔도 모듈이 새 배경 범위를 넘지 않게 한다.
+  if (card?.classList.contains('module-fit-locked')) fitAModulesToBackground(card);
 }
 
 function setupLayoutSwitch() {
@@ -621,25 +627,24 @@ function setupAModuleResizers() {
       const isHorizontal = state.orientation === 'H';
 
       const onMouseMove = (moveEvt) => {
-        // 가로형 모서리 드래그는 높이를 바꾸지 않는다. 표와 자유 입력창의
-        // 가로 분할 비율만 조절해 세로형처럼 늘어나는 현상을 막는다.
+        // 가로 분할 비율은 중앙선 리사이저가 전담한다. 가로형 모서리 핸들은 높이만 조절한다.
         if (isHorizontal) {
-          const dividerWidth = document.getElementById('a-resizer')?.getBoundingClientRect().width || 20;
-          const availableWidth = containerRect.width - dividerWidth;
-          const commentMin = A_MODULE_SIZE_LIMITS.comment.minWidth;
-          const tableMin = A_MODULE_SIZE_LIMITS.table.minWidth;
-          const requestedWidth = startRect.width + moveEvt.clientX - startX;
-          const tableWidth = key === 'table'
-            ? requestedWidth
-            : availableWidth - requestedWidth;
-          const clampedTableWidth = Math.max(
-            tableMin,
-            Math.min(availableWidth - commentMin, tableWidth)
+          const maxHeightPx = Math.max(
+            limits.minHeight,
+            cardRect.bottom - startRect.top - 14
           );
-          state.tableWidthPercent = (clampedTableWidth / containerRect.width) * 100;
-          const table = document.getElementById('mod-table');
-          if (table) table.style.width = `${state.tableWidthPercent}%`;
-          window.requestAnimationFrame(applyACommentContentFit);
+          const heightPx = Math.max(
+            limits.minHeight,
+            Math.min(maxHeightPx, startRect.height + moveEvt.clientY - startY)
+          );
+          const nextScale = Math.max(0.2, Math.min(1, heightPx / moduleSize.baseHeight));
+          state.aModuleSizes[key].height = Math.round(heightPx);
+          state.aModuleSizes[key].scale = nextScale;
+          module.style.height = `${state.aModuleSizes[key].height}px`;
+          module.style.flex = 'none';
+          module.style.alignSelf = 'flex-start';
+          applyAModuleContentScale(module, nextScale);
+          if (key === 'comment') window.requestAnimationFrame(applyACommentContentFit);
           return;
         }
 
@@ -774,6 +779,8 @@ function trimACommentModuleBlankSpace() {
   const content = module?.querySelector('.a-module-content-scale');
   const size = state.aModuleSizes.comment;
   if (!module || !content || !Number.isFinite(size.height) || module.classList.contains('is-resizing')) return;
+  // 배경 맞춤 중에는 모듈이 콘텐츠를 따라 다시 커지면 안 된다.
+  if (module.closest('.card-canvas')?.classList.contains('module-fit-locked')) return;
 
   const dragBarHeight = module.querySelector('.module-drag-bar')?.offsetHeight ?? 0;
   const contentHeight = content.getBoundingClientRect().height;
@@ -795,6 +802,11 @@ function growACommentModuleForNewCard(currentTextareaHeight = 65) {
   const module = document.getElementById('mod-comment');
   const size = state.aModuleSizes.comment;
   if (!module || !Number.isFinite(size.height)) return;
+  // 고정 배경 안에서는 새 입력창을 추가해도 카드 배경을 키우지 않고 내부 영역에 맞춘다.
+  if (module.closest('.card-canvas')?.classList.contains('module-fit-locked')) {
+    applyACommentContentFit();
+    return;
+  }
 
   const scale = Number.isFinite(size.scale) ? size.scale : 1;
   const newCardHeight = 56 + 12 + Math.max(65, currentTextareaHeight);
@@ -835,12 +847,61 @@ function setupModuleSizeReset() {
       module.style.alignSelf = '';
       applyAModuleContentScale(module, 1);
     });
+    document.getElementById('export-card')?.classList.remove('module-fit-locked');
+    document.getElementById('export-card')?.style.removeProperty('height');
     applyOrientation(state.orientation);
     applyACommentContentFit();
   });
 }
 
 // 수동 리사이즈한 뒤에도 각 A 모듈이 카드 배경 안에서 끝나도록 일괄 보정한다.
+function getBackgroundFitHeight(card) {
+  // 콘텐츠의 실제 높이는 모듈 크기에 따라 달라지므로 배경 맞춤 기준으로 쓰지 않는다.
+  // CSS에 정의한 카드 배경의 고정 기준 높이만 사용한다.
+  const configuredHeight = Number.parseFloat(
+    window.getComputedStyle(card).getPropertyValue('--background-fit-height')
+  );
+  return Number.isFinite(configuredHeight) && configuredHeight > 0 ? configuredHeight : 580;
+}
+
+function fitAModulesToBackground(card) {
+  const backgroundHeight = getBackgroundFitHeight(card);
+  card.style.height = `${backgroundHeight}px`;
+  card.classList.add('module-fit-locked');
+
+  window.requestAnimationFrame(() => {
+    const isHorizontal = state.orientation === 'H';
+    const commentReserve = isHorizontal ? 0 : A_MODULE_SIZE_LIMITS.comment.minHeight + 16;
+
+    ['table', 'comment'].forEach((key) => {
+      const module = document.getElementById(key === 'table' ? 'mod-table' : 'mod-comment');
+      if (!module) return;
+
+      const cardRect = card.getBoundingClientRect();
+      const rect = module.getBoundingClientRect();
+      // 세로형에서는 표가 자유 입력창의 자리를 침범하지 않도록 미리 남겨 둔다.
+      const reservedBelow = key === 'table' ? commentReserve : 0;
+      const availableHeight = Math.floor(cardRect.bottom - rect.top - 14 - reservedBelow);
+      const targetHeight = Math.max(80, availableHeight);
+      const currentScale = Number.isFinite(state.aModuleSizes[key].scale)
+        ? state.aModuleSizes[key].scale
+        : 1;
+      const nextScale = Math.max(0.2, Math.min(currentScale, targetHeight / Math.max(rect.height, 1)));
+
+      state.aModuleSizes[key].height = targetHeight;
+      state.aModuleSizes[key].scale = nextScale;
+      module.style.height = `${targetHeight}px`;
+      module.style.flex = 'none';
+      module.style.alignSelf = 'flex-start';
+      applyAModuleContentScale(module, nextScale);
+    });
+
+    state.aModuleSizes.comment.fitContent = true;
+    applyACommentContentFit();
+    trimACommentModuleBlankSpace();
+  });
+}
+
 function setupModuleFitToCard() {
   const button = document.getElementById('btn-fit-modules-to-card');
   if (!button) return;
@@ -848,25 +909,7 @@ function setupModuleFitToCard() {
   button.addEventListener('click', () => {
     const card = document.getElementById('export-card');
     if (!card) return;
-    const cardRect = card.getBoundingClientRect();
-    ['table', 'comment'].forEach((key) => {
-      const module = document.getElementById(key === 'table' ? 'mod-table' : 'mod-comment');
-      if (!module) return;
-      const rect = module.getBoundingClientRect();
-      const limits = A_MODULE_SIZE_LIMITS[key];
-      const maxHeight = Math.max(limits.minHeight, Math.floor(cardRect.bottom - rect.top - 14));
-      if (rect.height > maxHeight || key === 'comment') {
-        state.aModuleSizes[key].height = maxHeight;
-        module.style.height = `${maxHeight}px`;
-        module.style.flex = 'none';
-        module.style.alignSelf = 'flex-start';
-      }
-    });
-    state.aModuleSizes.comment.fitContent = true;
-    window.requestAnimationFrame(() => {
-      applyACommentContentFit();
-      trimACommentModuleBlankSpace();
-    });
+    fitAModulesToBackground(card);
   });
 }
 
@@ -1395,6 +1438,7 @@ function setupQAComponent() {
       container.appendChild(card);
     });
     bindItemDragEvents(container, state.qaList, render);
+    scheduleBCenterDividers();
   }
 
   btnAdd.onclick = () => {
@@ -1403,6 +1447,93 @@ function setupQAComponent() {
   };
 
   render();
+}
+
+function updateBCenterLineButton() {
+  const button = document.getElementById('btn-b-center-line');
+  const container = document.getElementById('qa-container');
+  if (button) {
+    button.setAttribute('aria-pressed', String(state.bCenterLine));
+    button.textContent = state.bCenterLine ? '✓ 중앙선' : '＋ 중앙선';
+  }
+  container?.classList.toggle('has-center-lines', state.bCenterLine);
+}
+
+function renderBCenterDividers() {
+  const container = document.getElementById('qa-container');
+  if (!container) return;
+  container.querySelector('.b-center-divider-layer')?.remove();
+  if (!state.bCenterLine) return;
+
+  const containerRect = container.getBoundingClientRect();
+  const cards = [...container.querySelectorAll('.qa-card-item')]
+    .map((card) => ({ rect: card.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.width > 0 && rect.height > 0);
+  if (cards.length < 2) return;
+
+  const rows = [];
+  cards.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left).forEach((entry) => {
+    const row = rows.find((candidate) => Math.abs(candidate.top - entry.rect.top) < 4);
+    if (row) row.cards.push(entry);
+    else rows.push({ top: entry.rect.top, cards: [entry] });
+  });
+  rows.forEach((row) => row.cards.sort((a, b) => a.rect.left - b.rect.left));
+
+  const layer = document.createElement('div');
+  layer.className = 'b-center-divider-layer';
+  const addLine = (direction, style) => {
+    const line = document.createElement('i');
+    line.className = `b-center-divider is-${direction}`;
+    Object.assign(line.style, style);
+    layer.appendChild(line);
+  };
+
+  rows.forEach((row) => {
+    for (let index = 0; index < row.cards.length - 1; index += 1) {
+      const left = row.cards[index].rect;
+      const right = row.cards[index + 1].rect;
+      const x = ((left.right + right.left) / 2) - containerRect.left;
+      const top = Math.min(left.top, right.top) - containerRect.top;
+      const bottom = Math.max(left.bottom, right.bottom) - containerRect.top;
+      addLine('vertical', { left: `${x - 1}px`, top: `${top}px`, height: `${Math.max(0, bottom - top)}px` });
+    }
+  });
+
+  for (let index = 0; index < rows.length - 1; index += 1) {
+    const upperCards = rows[index].cards.map(({ rect }) => rect);
+    const lowerCards = rows[index + 1].cards.map(({ rect }) => rect);
+    const upperBottom = Math.max(...upperCards.map((rect) => rect.bottom));
+    const lowerTop = Math.min(...lowerCards.map((rect) => rect.top));
+    const y = ((upperBottom + lowerTop) / 2) - containerRect.top;
+    const allCards = [...upperCards, ...lowerCards];
+    const left = Math.min(...allCards.map((rect) => rect.left)) - containerRect.left;
+    const right = Math.max(...allCards.map((rect) => rect.right)) - containerRect.left;
+    addLine('horizontal', { left: `${left}px`, top: `${y - 1}px`, width: `${Math.max(0, right - left)}px` });
+  }
+  container.appendChild(layer);
+}
+
+function scheduleBCenterDividers() {
+  window.requestAnimationFrame(renderBCenterDividers);
+}
+
+function setupBCenterLineControl() {
+  const button = document.getElementById('btn-b-center-line');
+  const container = document.getElementById('qa-container');
+  if (!button || !container) return;
+
+  button.addEventListener('mousedown', (event) => event.stopPropagation());
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    state.bCenterLine = !state.bCenterLine;
+    updateBCenterLineButton();
+    scheduleBCenterDividers();
+  });
+  container.addEventListener('input', scheduleBCenterDividers);
+  if (window.ResizeObserver) new ResizeObserver(scheduleBCenterDividers).observe(container);
+  window.addEventListener('resize', scheduleBCenterDividers);
+  updateBCenterLineButton();
 }
 
 // 12. 테마 프리셋 전환
@@ -1734,6 +1865,7 @@ function setupShareCode() {
       tableBg: state.tableBg,
       profileSize: state.profileSize,
       bInputScale: state.bInputScale,
+      bCenterLine: state.bCenterLine,
       profilePos: state.profilePos,
       profileDivider: state.profileDivider,
       profileBg: state.profileBg,
@@ -1796,6 +1928,10 @@ function setupShareCode() {
 
       if (data.bInputScale) {
         setBInputScale(data.bInputScale);
+      }
+      if (data.bCenterLine !== undefined) {
+        state.bCenterLine = Boolean(data.bCenterLine);
+        updateBCenterLineButton();
       }
 
       if (data.profilePos) state.profilePos = data.profilePos;
@@ -1911,6 +2047,7 @@ function setupShareCode() {
       if (data.qaList && Array.isArray(data.qaList)) {
         state.qaList = data.qaList;
         setupQAComponent();
+        scheduleBCenterDividers();
       }
 
       if (data.stickers) {

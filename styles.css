@@ -12,7 +12,8 @@
   /* 동적 크기 변수 */
   --avatar-size: 85px;
   --meta-font-size: 0.88rem;
-  --qa-scale: 1;
+  --qa-font-scale: 1;
+  --qa-padding-scale: 1;
 }
 
 [data-theme="purple"] {
@@ -347,6 +348,9 @@ body.is-horizontal .toolbar-row {
 
 .card-canvas.horizontal-mode {
   max-width: 1040px;
+  min-height: 580px;
+  height: auto;
+  overflow: visible;
 }
 
 /* 편집 카드와 내보내기 기준 미리보기를 넓은 화면에서 나란히 배치한다. */
@@ -540,7 +544,8 @@ body.is-horizontal .toolbar-row {
   background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 12px;
+  /* transform 대신 실제 box model 값을 함께 키워 인접 카드와 겹치지 않게 한다. */
+  padding: calc(12px * var(--qa-padding-scale, 1));
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -559,8 +564,8 @@ body.is-horizontal .toolbar-row {
   display: flex !important;
   justify-content: space-between !important;
   align-items: center !important;
-  margin-bottom: 8px !important;
-  gap: 8px !important;
+  margin-bottom: calc(8px * var(--qa-padding-scale, 1)) !important;
+  gap: calc(8px * var(--qa-padding-scale, 1)) !important;
   width: 100% !important;
   box-sizing: border-box;
 }
@@ -622,9 +627,9 @@ body.is-horizontal .toolbar-row {
   background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: calc(8px * var(--qa-scale));
-  font-size: calc(0.85rem * var(--qa-scale));
-  min-height: calc(65px * var(--qa-scale));
+  padding: calc(8px * var(--qa-padding-scale, 1));
+  font-size: calc(0.85rem * var(--qa-font-scale, 1));
+  min-height: calc(65px * var(--qa-padding-scale, 1));
   color: var(--text);
   resize: vertical;
   outline: none;
@@ -637,10 +642,10 @@ body.is-horizontal .toolbar-row {
   background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: calc(6px * var(--qa-scale));
-  font-size: calc(0.82rem * var(--qa-scale));
+  padding: calc(6px * var(--qa-padding-scale, 1));
+  font-size: calc(0.82rem * var(--qa-font-scale, 1));
   color: var(--text);
-  margin-bottom: calc(4px * var(--qa-scale));
+  margin-bottom: calc(4px * var(--qa-padding-scale, 1));
   outline: none;
   box-sizing: border-box;
 }
@@ -648,7 +653,7 @@ body.is-horizontal .toolbar-row {
 .chip-options-editable {
   display: flex;
   flex-wrap: wrap;
-  gap: calc(8px * var(--qa-scale));
+  gap: calc(8px * var(--qa-padding-scale, 1));
   align-items: center;
 }
 .custom-chip-edit {
@@ -656,8 +661,8 @@ body.is-horizontal .toolbar-row {
   align-items: center;
   background: var(--input-bg);
   border: 1px solid var(--border);
-  border-radius: calc(20px * var(--qa-scale));
-  padding: calc(4px * var(--qa-scale)) calc(6px * var(--qa-scale)) calc(4px * var(--qa-scale)) calc(14px * var(--qa-scale));
+  border-radius: calc(20px * var(--qa-padding-scale, 1));
+  padding: calc(4px * var(--qa-padding-scale, 1)) calc(6px * var(--qa-padding-scale, 1)) calc(4px * var(--qa-padding-scale, 1)) calc(14px * var(--qa-padding-scale, 1));
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
@@ -678,13 +683,13 @@ body.is-horizontal .toolbar-row {
 }
 .custom-chip-edit .chip-text-btn {
   color: var(--text);
-  font-size: calc(0.82rem * var(--qa-scale));
+  font-size: calc(0.82rem * var(--qa-font-scale, 1));
   margin-right: 6px;
   cursor: pointer;
 }
 .custom-chip-edit .chip-del-btn {
   color: var(--subtext);
-  font-size: calc(0.95rem * var(--qa-scale));
+  font-size: calc(0.95rem * var(--qa-font-scale, 1));
   line-height: 1;
   padding: 0 4px;
   cursor: pointer;
@@ -697,9 +702,9 @@ body.is-horizontal .toolbar-row {
   background: transparent;
   border: 1px dashed var(--accent);
   color: var(--accent);
-  border-radius: calc(20px * var(--qa-scale));
-  padding: calc(5px * var(--qa-scale)) calc(12px * var(--qa-scale));
-  font-size: calc(0.8rem * var(--qa-scale));
+  border-radius: calc(20px * var(--qa-padding-scale, 1));
+  padding: calc(5px * var(--qa-padding-scale, 1)) calc(12px * var(--qa-padding-scale, 1));
+  font-size: calc(0.8rem * var(--qa-font-scale, 1));
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -709,16 +714,16 @@ body.is-horizontal .toolbar-row {
 
 .qa-dropdown-select,
 .dropdown-captured-badge {
-  padding: calc(8px * var(--qa-scale)) calc(12px * var(--qa-scale)) !important;
-  font-size: calc(0.85rem * var(--qa-scale)) !important;
+  padding: calc(8px * var(--qa-padding-scale, 1)) calc(12px * var(--qa-padding-scale, 1)) !important;
+  font-size: calc(0.85rem * var(--qa-font-scale, 1)) !important;
 }
 .editable-dropdown-items {
   background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--subtext);
-  padding: calc(6px * var(--qa-scale)) calc(8px * var(--qa-scale));
-  font-size: calc(0.8rem * var(--qa-scale));
+  padding: calc(6px * var(--qa-padding-scale, 1)) calc(8px * var(--qa-padding-scale, 1));
+  font-size: calc(0.8rem * var(--qa-font-scale, 1));
   width: 100%;
   outline: none;
 }
@@ -903,6 +908,7 @@ body.is-horizontal .toolbar-row {
   padding-bottom: 16px;
   margin-bottom: 18px;
   align-items: center;
+  min-width: 0;
   transition: all 0.2s ease;
 }
 
@@ -942,6 +948,7 @@ body.is-horizontal .toolbar-row {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
   border-radius: 10px;
 }
 .avatar-box span { font-size: 0.75rem; color: var(--subtext); text-align: center; }
@@ -1146,8 +1153,8 @@ body.is-horizontal .toolbar-row {
 
 .card-canvas.horizontal-mode .layout-a-table-wrap {
   width: 55%;
-  min-width: 280px;
-  max-width: 75%;
+  min-width: 320px;
+  max-width: 70%;
 }
 
 .layout-a-table-wrap.has-bg {
@@ -1236,6 +1243,7 @@ body.is-horizontal .toolbar-row {
   user-select: none;
   z-index: 6;
   flex-shrink: 0;
+  touch-action: none;
 }
 
 .divider-line {
@@ -1261,6 +1269,7 @@ body.is-horizontal .toolbar-row {
   padding: 8px 6px;
   font-size: 0.83rem;
   text-align: center;
+  white-space: nowrap;
 }
 .matrix-table th { background: var(--input-bg); color: var(--accent); }
 
@@ -1379,6 +1388,14 @@ body.is-horizontal .toolbar-row {
 /* =========================================
    타입 B (카드형식 - 가로 모드에서만 2열 그리드)
    ========================================= */
+#layout-b {
+  --qa-font-scale: 1;
+  --qa-padding-scale: 1;
+}
+#layout-b.scale-large {
+  --qa-font-scale: 1.15;
+  --qa-padding-scale: 1.15;
+}
 .qa-list {
   display: flex;
   flex-direction: column;
@@ -1648,5 +1665,64 @@ body.is-horizontal .action-footer {
   word-break: break-all !important;
 }
 .card-canvas.exporting {
+  /* 편집용 기본 캔버스 높이는 미리보기·PNG에는 적용하지 않는다. */
+  min-height: 0 !important;
+  height: auto !important;
   overflow: visible !important;
+}
+
+/* 휴대폰에서는 작업 도구와 캔버스를 화면 폭 안에서 우선 배치한다. */
+@media (max-width: 700px) {
+  body { padding: 14px 10px 20px; }
+  header { margin-bottom: 14px; }
+  header h1 { font-size: 1.3rem; }
+  header p { font-size: 0.8rem; line-height: 1.45; }
+  .control-panel,
+  .control-panel.toolbar { padding: 10px; border-radius: 10px; }
+  .share-bar { flex-direction: column; }
+  .share-bar > .input-with-btn,
+  .share-bar > .btn-ui { width: 100%; }
+  .toolbar-row,
+  .toolbar-group { gap: 6px; }
+  .segmented-control { max-width: 100%; }
+  .segment-btn,
+  .btn-ui { font-size: 0.76rem; padding-inline: 9px; }
+  .workspace-layout { gap: 18px; }
+  .card-canvas,
+  .card-canvas.horizontal-mode { min-height: 0; border-radius: 12px; }
+  .card-content-layer { padding: 14px; }
+
+  /* 화면 폭으로는 가로형의 두 모듈을 안전하게 배치할 수 없어 세로로 재배치한다. */
+  .card-canvas.horizontal-mode .layout-a-container { flex-direction: column; gap: 16px; }
+  .card-canvas.horizontal-mode .layout-a-table-wrap,
+  .card-canvas.horizontal-mode .layout-a-comment-wrap {
+    width: 100% !important;
+    min-width: 0;
+    max-width: none;
+  }
+  .card-canvas.horizontal-mode .a-divider-resizer { display: none !important; }
+  .matrix-table { min-width: 0; }
+  .matrix-table th.th-radio,
+  .matrix-table td.td-radio {
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+  }
+  .card-canvas.horizontal-mode #qa-container { grid-template-columns: minmax(0, 1fr); }
+  .card-canvas.horizontal-mode #qa-container .qa-card-item:last-child:nth-child(odd) { grid-column: auto; }
+  .action-footer { margin-top: 16px; }
+}
+
+@media (max-width: 390px) {
+  .segment-label { display: none; }
+  .segment-btn,
+  .btn-ui { font-size: 0.72rem; padding-inline: 7px; }
+  .matrix-table th,
+  .matrix-table td { padding: 5px 2px; font-size: 0.74rem; }
+  .matrix-table th.th-radio,
+  .matrix-table td.td-radio {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+  }
 }

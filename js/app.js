@@ -252,7 +252,7 @@ function setProfileSize(type) {
   const root = document.documentElement;
   const isLarge = (type === 'large');
   
-  const sizePx = isLarge ? 115 : 85;
+  const sizePx = isLarge ? 110 : 85;
   const fontRem = isLarge ? 0.98 : 0.88;
   root.style.setProperty('--avatar-size', `${sizePx}px`);
   root.style.setProperty('--meta-font-size', `${fontRem}rem`);
@@ -276,8 +276,9 @@ function setupProfileSizeButtons() {
 function setBInputScale(type) {
   state.bInputScale = type;
   const isLarge = (type === 'large');
-  const scaleVal = isLarge ? 1.25 : 1.0;
-  document.documentElement.style.setProperty('--qa-scale', scaleVal);
+  // transform 확대는 레이아웃 상의 실제 크기를 바꾸지 않아 다른 카드와 겹친다.
+  // B 타입 범위에서만 CSS 변수를 바꾸는 클래스로 실제 여백과 글자를 함께 확장한다.
+  document.getElementById('layout-b')?.classList.toggle('scale-large', isLarge);
 
   const btnN = document.getElementById('btn-input-scale-normal');
   const btnL = document.getElementById('btn-input-scale-large');
@@ -488,40 +489,44 @@ function setupTableResizer() {
   const container = document.getElementById('a-container');
   if (!resizer || !tableWrap || !container) return;
 
-  let isResizing = false;
+  let activePointerId = null;
 
-  resizer.addEventListener('mousedown', () => {
-    if (state.orientation !== 'H') return;
-    isResizing = true;
+  const resize = (e) => {
+    if (activePointerId === null || e.pointerId !== activePointerId) return;
+    const containerRect = container.getBoundingClientRect();
+    if (!containerRect.width) return;
+    const isTableFirst = (container.firstElementChild === tableWrap);
+    let widthPx;
+    if (isTableFirst) {
+      widthPx = e.clientX - containerRect.left;
+    } else {
+      widthPx = containerRect.right - e.clientX;
+    }
+    const maxWidth = containerRect.width * 0.7;
+    // 매우 작은 화면에서는 최소 폭이 최대 폭을 넘지 않도록 함께 제한한다.
+    const minWidth = Math.min(320, maxWidth);
+    const clampedWidth = Math.max(minWidth, Math.min(maxWidth, widthPx));
+    state.tableWidthPercent = (clampedWidth / containerRect.width) * 100;
+    tableWrap.style.width = `${state.tableWidthPercent}%`;
+  };
+
+  const stopResize = (e) => {
+    if (activePointerId === null || (e && e.pointerId !== activePointerId)) return;
+    if (resizer.hasPointerCapture(activePointerId)) resizer.releasePointerCapture(activePointerId);
+    activePointerId = null;
+    document.body.style.cursor = '';
+  };
+
+  resizer.addEventListener('pointerdown', (e) => {
+    if (state.orientation !== 'H' || e.button !== 0) return;
+    e.preventDefault();
+    activePointerId = e.pointerId;
+    resizer.setPointerCapture(activePointerId);
     document.body.style.cursor = 'col-resize';
   });
-
-  window.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-    const containerRect = container.getBoundingClientRect();
-    const isTableFirst = (container.firstElementChild === tableWrap);
-
-    let percent;
-    if (isTableFirst) {
-      const newWidth = e.clientX - containerRect.left;
-      percent = (newWidth / containerRect.width) * 100;
-    } else {
-      const newWidth = containerRect.right - e.clientX;
-      percent = (newWidth / containerRect.width) * 100;
-    }
-
-    if (percent >= 30 && percent <= 75) {
-      state.tableWidthPercent = percent;
-      tableWrap.style.width = `${percent}%`;
-    }
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (isResizing) {
-      isResizing = false;
-      document.body.style.cursor = 'default';
-    }
-  });
+  resizer.addEventListener('pointermove', resize);
+  resizer.addEventListener('pointerup', stopResize);
+  resizer.addEventListener('pointercancel', stopResize);
 }
 
 // A 타입 모듈은 버튼으로 크기 조절을 활성화한 뒤 모서리 핸들로 조절한다.

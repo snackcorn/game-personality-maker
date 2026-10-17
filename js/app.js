@@ -2,6 +2,9 @@ import { LayerManager } from './layerManager.js';
 import { generateCode, parseCode } from './storage.js';
 import { createCardPreview, exportCardAsPNG } from './export.js';
 
+// 기능 수정 시 이 번호를 올리면 페이지 상단 표기도 함께 갱신된다.
+const APP_VERSION = '1.0.0';
+
 const A_MODULE_SIZE_LIMITS = {
   table: { minWidth: 320, minHeight: 180 },
   comment: { minWidth: 240, minHeight: 150 }
@@ -75,6 +78,8 @@ const state = {
 const layerMgr = new LayerManager('layer-back-images', 'layer-front-images');
 
 document.addEventListener('DOMContentLoaded', () => {
+  const versionLabel = document.getElementById('app-version');
+  if (versionLabel) versionLabel.textContent = APP_VERSION;
   setupPrivacyNotice();
   setupLayoutSwitch();
   setupOrientationSwitch();

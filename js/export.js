@@ -23,6 +23,18 @@ function expandTextareasForCapture(cardEl) {
   });
 }
 
+// canvas 렌더러는 일부 브라우저에서 input의 세로 글리프를 잘라낸다.
+// 복제 카드에서만 정적 텍스트로 바꿔 편집 화면은 유지하면서 PNG를 안정화한다.
+function replaceTextInputsForCapture(cardEl) {
+  cardEl.querySelectorAll('input[type="text"]').forEach((input) => {
+    const text = input.ownerDocument.createElement('span');
+    text.className = `${input.className} capture-text`;
+    text.textContent = input.value;
+    text.setAttribute('aria-label', input.getAttribute('aria-label') || '');
+    input.replaceWith(text);
+  });
+}
+
 /** 편집 UI를 제거한 카드 이미지를 Data URL로 렌더링한다. */
 export async function createCardPreview(cardElementId) {
   const cardEl = document.getElementById(cardElementId);
@@ -38,7 +50,10 @@ export async function createCardPreview(cardElementId) {
     onclone: (clonedDocument) => {
       const clonedCard = clonedDocument.getElementById(cardElementId);
       clonedCard?.classList.add('exporting');
-      if (clonedCard) expandTextareasForCapture(clonedCard);
+      if (clonedCard) {
+        expandTextareasForCapture(clonedCard);
+        replaceTextInputsForCapture(clonedCard);
+      }
     }
   });
   return canvas.toDataURL('image/png');
@@ -62,7 +77,10 @@ export async function exportCardAsPNG(cardElementId, fileName = 'gaming_personal
       onclone: (clonedDocument) => {
         const clonedCard = clonedDocument.getElementById(cardElementId);
         clonedCard?.classList.add('exporting');
-        if (clonedCard) expandTextareasForCapture(clonedCard);
+        if (clonedCard) {
+          expandTextareasForCapture(clonedCard);
+          replaceTextInputsForCapture(clonedCard);
+        }
       }
     });
 

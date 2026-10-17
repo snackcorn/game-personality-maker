@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupColorCustomModal();
   setupACommentToggle();
   setupACommentComponent();
+  setupACommentAutoFitObserver();
   setupRichTextToolbar();
   setupTableResizer();
   setupAModuleResizers();
@@ -213,7 +214,8 @@ function applyLayout(mode) {
 }
 
 // 3. 가로/세로 방향 전환
-function applyOrientation(orient) {
+function applyOrientation(orient, preserveModuleSizes = false) {
+  const previousOrientation = state.orientation;
   state.orientation = orient;
   const isH = (orient === 'H');
   const btnV = document.getElementById('btn-orient-v');
@@ -226,6 +228,25 @@ function applyOrientation(orient) {
   if (card) card.classList.toggle('horizontal-mode', isH);
   if (document.body) document.body.classList.toggle('is-horizontal', isH);
   if (resizer) resizer.style.display = (state.layout === 'A' && state.showAComment && isH) ? 'flex' : 'none';
+
+  // 방향이 바뀌면 이전 방향의 수동 픽셀 크기는 새 축에서 유효하지 않아
+  // 모듈이 카드 밖으로 튀어나온다. 사용자 클릭 전환에서는 안전한 기본값으로 되돌린다.
+  if (!preserveModuleSizes && previousOrientation !== orient) {
+    const commentFit = Boolean(state.aModuleSizes.comment.fitContent);
+    state.aModuleSizes = {
+      table: { width: null, height: null, scale: 1, baseWidth: null, baseHeight: null },
+      comment: { width: null, height: null, scale: 1, baseWidth: null, baseHeight: null, fitContent: commentFit }
+    };
+    ['mod-table', 'mod-comment'].forEach((id) => {
+      const module = document.getElementById(id);
+      if (!module) return;
+      module.style.width = '';
+      module.style.height = '';
+      module.style.flex = '';
+      module.style.alignSelf = '';
+      applyAModuleContentScale(module, 1);
+    });
+  }
 
   // 표 너비 리사이즈 값은 가로 모드 전용이다. 세로 모드에서는 100% 폭을 사용한다.
   const tableWrap = document.getElementById('mod-table');
@@ -682,8 +703,27 @@ function applyACommentContentFit() {
   const textareas = content.querySelectorAll('textarea, .rich-text-editor');
   const headerAndGaps = cards.length * 56 + Math.max(0, cards.length - 1) * 12 + 42;
   const textareaHeight = Math.max(65, Math.floor((availableHeight - headerAndGaps) / Math.max(textareas.length, 1)));
-  content.style.height = '';
+  // 스케일된 컨텐츠 영역 자체에 높이를 부여해야 카드와 입력 영역이 남는 공간까지 채운다.
+  content.style.height = `${Math.floor(availableHeight)}px`;
   textareas.forEach(textarea => { textarea.style.height = `${textareaHeight}px`; });
+}
+
+function setupACommentAutoFitObserver() {
+  const module = document.getElementById('mod-comment');
+  const container = document.getElementById('a-container');
+  if (!module || !container || !window.ResizeObserver) return;
+
+  let frameId = null;
+  const scheduleFit = () => {
+    if (frameId) cancelAnimationFrame(frameId);
+    frameId = requestAnimationFrame(() => {
+      frameId = null;
+      applyACommentContentFit();
+    });
+  };
+  const observer = new ResizeObserver(scheduleFit);
+  observer.observe(module);
+  observer.observe(container);
 }
 
 // 고정 크기가 설정된 자유 입력창은 실제 카드 높이까지만 차지하게 해 하단의
@@ -877,6 +917,8 @@ function createMovableCard(itemData, idx, dataList, refreshCallback) {
 
 let activeRichTextEditor = null;
 let richTextToolbar = null;
+let activeRichTextRange = null;
+let isRichToolbarInteracting = false;
 
 function escapeHtml(value) {
   const element = document.createElement('div');
@@ -914,22 +956,40 @@ function setupRichTextToolbar() {
   richTextToolbar.setAttribute('role', 'toolbar');
   richTextToolbar.setAttribute('aria-label', '선택한 글자 서식');
   richTextToolbar.innerHTML = `
-    <button type="button" data-command="fontSize" data-value="2" title="글자 작게">A−</button>
-    <button type="button" data-command="fontSize" data-value="3" title="글자 보통">A</button>
-    <button type="button" data-command="fontSize" data-value="5" title="글자 크게">A+</button>
+    <label class="rich-text-size" title="글자 크기">
+      <span>크기</span>
+      <input type="number" min="1" max="7" step="1" value="3" aria-label="글자 크기" />
+    </label>
     <button type="button" data-command="bold" title="굵게"><strong>B</strong></button>
     <button type="button" data-command="italic" title="기울이기"><em>I</em></button>
     <button type="button" data-command="strikeThrough" title="취소선"><s>S</s></button>
   `;
   document.body.appendChild(richTextToolbar);
 
-  // 클릭으로 선택 범위가 사라지는 것을 막는다.
-  richTextToolbar.addEventListener('pointerdown', (event) => event.preventDefault());
+  // 버튼 클릭으로 선택 범위가 사라지는 것을 막는다.
+  richTextToolbar.addEventListener('pointerdown', (event) => {
+    if (event.target.closest('button')) event.preventDefault();
+    if (event.target.closest('input[type="number"]')) {
+      // 숫자 입력칸으로 포커스가 옮겨가는 동안 선택 범위를 보존한다.
+      isRichToolbarInteracting = true;
+      window.setTimeout(() => { isRichToolbarInteracting = false; }, 0);
+    }
+  });
   richTextToolbar.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-command]');
     if (!button || !activeRichTextEditor) return;
     activeRichTextEditor.focus();
+    restoreRichTextRange();
     document.execCommand(button.dataset.command, false, button.dataset.value || null);
+    activeRichTextEditor.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  richTextToolbar.querySelector('input[type="number"]')?.addEventListener('change', (event) => {
+    const size = Math.max(1, Math.min(7, Number(event.target.value) || 3));
+    event.target.value = String(size);
+    if (!activeRichTextEditor) return;
+    activeRichTextEditor.focus();
+    restoreRichTextRange();
+    document.execCommand('fontSize', false, String(size));
     activeRichTextEditor.dispatchEvent(new Event('input', { bubbles: true }));
   });
 
@@ -942,6 +1002,7 @@ function setupRichTextToolbar() {
 function updateRichTextToolbar() {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    if (isRichToolbarInteracting && activeRichTextEditor) return;
     hideRichTextToolbar();
     return;
   }
@@ -959,7 +1020,13 @@ function updateRichTextToolbar() {
   const rect = range.getBoundingClientRect();
   if (!rect.width && !rect.height) return;
   activeRichTextEditor = editor;
-  const toolbarWidth = 210;
+  activeRichTextRange = range.cloneRange();
+  const sizeInput = richTextToolbar.querySelector('input[type="number"]');
+  const selectedSize = Number(document.queryCommandValue('fontSize'));
+  if (sizeInput && Number.isFinite(selectedSize) && selectedSize >= 1 && selectedSize <= 7) {
+    sizeInput.value = String(selectedSize);
+  }
+  const toolbarWidth = 190;
   const left = Math.max(8, Math.min(window.innerWidth - toolbarWidth - 8, rect.left + rect.width / 2 - toolbarWidth / 2));
   richTextToolbar.style.left = `${left}px`;
   richTextToolbar.style.top = `${Math.max(8, rect.top - 42)}px`;
@@ -969,6 +1036,14 @@ function updateRichTextToolbar() {
 function hideRichTextToolbar() {
   richTextToolbar?.classList.remove('is-visible');
   activeRichTextEditor = null;
+  activeRichTextRange = null;
+}
+
+function restoreRichTextRange() {
+  if (!activeRichTextRange) return;
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(activeRichTextRange);
 }
 
 function renderCardContent(bodyEl, qa) {
@@ -1451,7 +1526,7 @@ function setupMatrixTable() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="row-label">
-          <input type="text" class="editable-cell-td" value="${row.title}" />
+          <div class="editable-cell-td rich-text-editor" contenteditable="true" role="textbox" aria-label="체크 항목"></div>
         </td>
         <td class="td-radio"><input type="radio" name="chk_${idx}" value="1" ${row.value === '1' ? 'checked' : ''} /></td>
         <td class="td-radio"><input type="radio" name="chk_${idx}" value="2" ${row.value === '2' ? 'checked' : ''} /></td>
@@ -1462,8 +1537,12 @@ function setupMatrixTable() {
       `;
 
       const textInput = tr.querySelector('.editable-cell-td');
+      textInput.innerHTML = typeof row.html === 'string'
+        ? sanitizeRichHtml(row.html)
+        : escapeHtml(row.title || '');
       textInput.addEventListener('input', (e) => {
-        row.title = e.target.value;
+        row.html = e.currentTarget.innerHTML;
+        row.title = e.currentTarget.innerText;
       });
 
       tr.querySelectorAll(`input[name="chk_${idx}"]`).forEach(radio => {
@@ -1632,7 +1711,7 @@ function setupShareCode() {
       }
 
       if (data.orientation) {
-        applyOrientation(data.orientation);
+        applyOrientation(data.orientation, true);
       }
 
       if (data.layout) {

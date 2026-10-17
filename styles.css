@@ -1442,12 +1442,17 @@ body.is-horizontal .toolbar-row {
   overflow: visible;
 }
 
-/* "입력창 맞춤"은 카드 골격을 누르지 않고 실제 입력 영역 높이만 변경한다. */
+/* 맞춤 모드의 영역은 카드 배경 > 모듈 배경 > 입력 목록 > 추가 버튼 순으로 분리한다. */
 .layout-a-comment-wrap.is-content-fitted .qa-body textarea {
   min-height: 65px;
   resize: vertical;
 }
-.layout-a-comment-wrap.is-content-fitted .a-module-content-scale,
+.layout-a-comment-wrap.is-content-fitted .a-module-content-scale {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 0;
+}
 .layout-a-comment-wrap.is-content-fitted .a-comment-list,
 .layout-a-comment-wrap.is-content-fitted .qa-card-item,
 .layout-a-comment-wrap.is-content-fitted .qa-body {
@@ -1457,12 +1462,17 @@ body.is-horizontal .toolbar-row {
 }
 .layout-a-comment-wrap.is-content-fitted .a-comment-list,
 .layout-a-comment-wrap.is-content-fitted .qa-card-item,
-.layout-a-comment-wrap.is-content-fitted .qa-body,
-.layout-a-comment-wrap.is-content-fitted .qa-body .rich-text-editor {
+.layout-a-comment-wrap.is-content-fitted .qa-body {
   flex: 1;
 }
 .layout-a-comment-wrap.is-content-fitted .qa-body .rich-text-editor {
+  flex: 1;
   min-height: 65px;
+  height: auto !important;
+}
+.layout-a-comment-wrap.is-content-fitted #btn-add-a-comment {
+  grid-row: 2;
+  margin: 0;
 }
 
 .a-comment-list {

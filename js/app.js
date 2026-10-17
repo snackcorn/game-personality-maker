@@ -616,6 +616,28 @@ function setupAModuleResizers() {
       const isHorizontal = state.orientation === 'H';
 
       const onMouseMove = (moveEvt) => {
+        // 가로형 모서리 드래그는 높이를 바꾸지 않는다. 표와 자유 입력창의
+        // 가로 분할 비율만 조절해 세로형처럼 늘어나는 현상을 막는다.
+        if (isHorizontal) {
+          const dividerWidth = document.getElementById('a-resizer')?.getBoundingClientRect().width || 20;
+          const availableWidth = containerRect.width - dividerWidth;
+          const commentMin = A_MODULE_SIZE_LIMITS.comment.minWidth;
+          const tableMin = A_MODULE_SIZE_LIMITS.table.minWidth;
+          const requestedWidth = startRect.width + moveEvt.clientX - startX;
+          const tableWidth = key === 'table'
+            ? requestedWidth
+            : availableWidth - requestedWidth;
+          const clampedTableWidth = Math.max(
+            tableMin,
+            Math.min(availableWidth - commentMin, tableWidth)
+          );
+          state.tableWidthPercent = (clampedTableWidth / containerRect.width) * 100;
+          const table = document.getElementById('mod-table');
+          if (table) table.style.width = `${state.tableWidthPercent}%`;
+          window.requestAnimationFrame(applyACommentContentFit);
+          return;
+        }
+
         // 모듈의 오른쪽/아래쪽이 카드 배경을 벗어나지 않도록 현재 카드 경계로 제한한다.
         const maxWidthPx = Math.max(
           limits.minWidth,
@@ -625,9 +647,7 @@ function setupAModuleResizers() {
           limits.minHeight,
           cardRect.bottom - startRect.top - 14
         );
-        const widthPx = isHorizontal
-          ? startRect.width
-          : Math.max(limits.minWidth, Math.min(maxWidthPx, startRect.width + moveEvt.clientX - startX));
+        const widthPx = Math.max(limits.minWidth, Math.min(maxWidthPx, startRect.width + moveEvt.clientX - startX));
         const heightPx = Math.max(limits.minHeight, Math.min(maxHeightPx, startRect.height + moveEvt.clientY - startY));
         const nextScale = Math.max(0.2, Math.min(
           1,
@@ -716,22 +736,12 @@ function applyACommentContentFit() {
   const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding - 10) / Math.max(scale, 0.1);
   const cards = content.querySelectorAll('.qa-card-item');
   const textareas = content.querySelectorAll('textarea, .rich-text-editor');
-  const addButton = content.querySelector('#btn-add-a-comment');
-  const addButtonHeight = addButton?.offsetHeight ?? 0;
-  const list = content.querySelector('.a-comment-list');
-  const listHeight = Math.max(65, availableHeight - addButtonHeight - 12);
-  const cardHeight = Math.max(65, Math.floor((listHeight - Math.max(0, cards.length - 1) * 12) / Math.max(cards.length, 1)));
   // 스케일된 컨텐츠 영역 자체에 높이를 부여해야 카드와 입력 영역이 남는 공간까지 채운다.
   content.style.height = `${Math.floor(availableHeight)}px`;
-  if (list) list.style.height = `${Math.floor(listHeight)}px`;
-  cards.forEach((card) => { card.style.height = `${cardHeight}px`; });
+  content.querySelector('.a-comment-list')?.style.removeProperty('height');
+  cards.forEach((card) => card.style.removeProperty('height'));
   // 상단 컨트롤의 실제 높이를 빼서 편집 영역을 남은 공간까지 정확히 채운다.
-  textareas.forEach((textarea) => {
-    const card = textarea.closest('.qa-card-item');
-    const topRowHeight = card?.querySelector('.qa-top-row')?.offsetHeight ?? 0;
-    const bodyPadding = 4;
-    textarea.style.height = `${Math.max(65, cardHeight - topRowHeight - bodyPadding)}px`;
-  });
+  textareas.forEach((textarea) => textarea.style.removeProperty('height'));
 }
 
 function setupACommentAutoFitObserver() {

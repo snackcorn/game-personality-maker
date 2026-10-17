@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupColorCustomModal();
   setupACommentToggle();
   setupACommentComponent();
+  setupRichTextToolbar();
   setupTableResizer();
   setupAModuleResizers();
   setupACommentFitControl();
@@ -495,19 +496,31 @@ function setupTableResizer() {
     if (activePointerId === null || e.pointerId !== activePointerId) return;
     const containerRect = container.getBoundingClientRect();
     if (!containerRect.width) return;
-    const isTableFirst = (container.firstElementChild === tableWrap);
-    let widthPx;
-    if (isTableFirst) {
-      widthPx = e.clientX - containerRect.left;
-    } else {
-      widthPx = containerRect.right - e.clientX;
-    }
-    const maxWidth = containerRect.width * 0.7;
-    // 매우 작은 화면에서는 최소 폭이 최대 폭을 넘지 않도록 함께 제한한다.
-    const minWidth = Math.min(320, maxWidth);
-    const clampedWidth = Math.max(minWidth, Math.min(maxWidth, widthPx));
+
+    // DOM 순서가 바뀌어도 첫 모듈을 기준으로 표의 실제 폭을 계산한다.
+    const modules = Array.from(container.children)
+      .filter((child) => child.classList.contains('inner-module'));
+    const isTableFirst = modules[0] === tableWrap;
+    const cursorWidth = isTableFirst
+      ? e.clientX - containerRect.left
+      : containerRect.right - e.clientX;
+
+    // 표/입력창 모두 최소 폭을 지키고, 컨테이너의 30~70% 안에서만 움직인다.
+    const dividerWidth = resizer.getBoundingClientRect().width || 20;
+    const tableMin = 260;
+    const commentMin = 240;
+    const minWidth = Math.max(containerRect.width * 0.3, tableMin);
+    const maxWidth = Math.min(
+      containerRect.width * 0.7,
+      containerRect.width - dividerWidth - commentMin
+    );
+    // 비정상적으로 좁은 데스크톱 폭에서도 역전된 경계값 때문에 튀지 않게 한다.
+    const safeMaxWidth = Math.max(minWidth, maxWidth);
+    const clampedWidth = Math.max(minWidth, Math.min(safeMaxWidth, cursorWidth));
     state.tableWidthPercent = (clampedWidth / containerRect.width) * 100;
     tableWrap.style.width = `${state.tableWidthPercent}%`;
+    // 가로 분할 비율 변화로 남는 세로 공간은 입력 영역이 즉시 채운다.
+    window.requestAnimationFrame(applyACommentContentFit);
   };
 
   const stopResize = (e) => {
@@ -515,6 +528,7 @@ function setupTableResizer() {
     if (resizer.hasPointerCapture(activePointerId)) resizer.releasePointerCapture(activePointerId);
     activePointerId = null;
     document.body.style.cursor = '';
+    document.body.style.userSelect = '';
   };
 
   resizer.addEventListener('pointerdown', (e) => {
@@ -523,6 +537,7 @@ function setupTableResizer() {
     activePointerId = e.pointerId;
     resizer.setPointerCapture(activePointerId);
     document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   });
   resizer.addEventListener('pointermove', resize);
   resizer.addEventListener('pointerup', stopResize);
@@ -640,7 +655,9 @@ function applyACommentContentFit() {
   const content = module?.querySelector('.a-module-content-scale');
   if (!module || !content) return;
 
-  const enabled = Boolean(state.aModuleSizes.comment.fitContent);
+  // 가로형은 두 모듈의 높이가 같아지므로, 입력창 맞춤을 자동 적용해 하단 빈 공간을 없앤다.
+  const autoFitInHorizontal = state.orientation === 'H';
+  const enabled = Boolean(state.aModuleSizes.comment.fitContent) || autoFitInHorizontal;
   module.classList.toggle('is-content-fitted', enabled);
   if (button) {
     button.setAttribute('aria-pressed', String(enabled));
@@ -650,7 +667,7 @@ function applyACommentContentFit() {
 
   if (!enabled) {
     content.style.height = '';
-    content.querySelectorAll('textarea').forEach(textarea => { textarea.style.height = ''; });
+    content.querySelectorAll('textarea, .rich-text-editor').forEach(textarea => { textarea.style.height = ''; });
     return;
   }
 
@@ -662,7 +679,7 @@ function applyACommentContentFit() {
   const verticalPadding = 24;
   const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding - 10) / Math.max(scale, 0.1);
   const cards = content.querySelectorAll('.qa-card-item');
-  const textareas = content.querySelectorAll('textarea');
+  const textareas = content.querySelectorAll('textarea, .rich-text-editor');
   const headerAndGaps = cards.length * 56 + Math.max(0, cards.length - 1) * 12 + 42;
   const textareaHeight = Math.max(65, Math.floor((availableHeight - headerAndGaps) / Math.max(textareas.length, 1)));
   content.style.height = '';
@@ -858,15 +875,121 @@ function createMovableCard(itemData, idx, dataList, refreshCallback) {
   return card;
 }
 
+let activeRichTextEditor = null;
+let richTextToolbar = null;
+
+function escapeHtml(value) {
+  const element = document.createElement('div');
+  element.textContent = String(value ?? '');
+  return element.innerHTML;
+}
+
+function sanitizeRichHtml(value) {
+  const template = document.createElement('template');
+  template.innerHTML = String(value ?? '');
+  const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'FONT', 'BR', 'DIV', 'SPAN']);
+  template.content.querySelectorAll('*').forEach((element) => {
+    if (!allowedTags.has(element.tagName)) {
+      element.replaceWith(document.createTextNode(element.textContent || ''));
+      return;
+    }
+    Array.from(element.attributes).forEach((attribute) => {
+      const isAllowedFontSize = element.tagName === 'FONT'
+        && attribute.name.toLowerCase() === 'size'
+        && /^[1-7]$/.test(attribute.value);
+      if (!isAllowedFontSize) element.removeAttribute(attribute.name);
+    });
+  });
+  return template.innerHTML;
+}
+
+// 선택한 문장에만 적용되는 서식 도구. textarea 대신 contenteditable을 써서
+// 굵게/기울임/취소선/글자 크기를 이미지 출력에도 그대로 보존한다.
+function setupRichTextToolbar() {
+  if (document.getElementById('rich-text-toolbar')) return;
+
+  richTextToolbar = document.createElement('div');
+  richTextToolbar.id = 'rich-text-toolbar';
+  richTextToolbar.className = 'rich-text-toolbar';
+  richTextToolbar.setAttribute('role', 'toolbar');
+  richTextToolbar.setAttribute('aria-label', '선택한 글자 서식');
+  richTextToolbar.innerHTML = `
+    <button type="button" data-command="fontSize" data-value="2" title="글자 작게">A−</button>
+    <button type="button" data-command="fontSize" data-value="3" title="글자 보통">A</button>
+    <button type="button" data-command="fontSize" data-value="5" title="글자 크게">A+</button>
+    <button type="button" data-command="bold" title="굵게"><strong>B</strong></button>
+    <button type="button" data-command="italic" title="기울이기"><em>I</em></button>
+    <button type="button" data-command="strikeThrough" title="취소선"><s>S</s></button>
+  `;
+  document.body.appendChild(richTextToolbar);
+
+  // 클릭으로 선택 범위가 사라지는 것을 막는다.
+  richTextToolbar.addEventListener('pointerdown', (event) => event.preventDefault());
+  richTextToolbar.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-command]');
+    if (!button || !activeRichTextEditor) return;
+    activeRichTextEditor.focus();
+    document.execCommand(button.dataset.command, false, button.dataset.value || null);
+    activeRichTextEditor.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  document.addEventListener('selectionchange', updateRichTextToolbar);
+  document.addEventListener('pointerdown', (event) => {
+    if (!event.target.closest('.rich-text-editor, .rich-text-toolbar')) hideRichTextToolbar();
+  });
+}
+
+function updateRichTextToolbar() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    hideRichTextToolbar();
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const selectedNode = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+    ? range.commonAncestorContainer
+    : range.commonAncestorContainer.parentElement;
+  const editor = selectedNode?.closest?.('.rich-text-editor');
+  if (!editor) {
+    hideRichTextToolbar();
+    return;
+  }
+
+  const rect = range.getBoundingClientRect();
+  if (!rect.width && !rect.height) return;
+  activeRichTextEditor = editor;
+  const toolbarWidth = 210;
+  const left = Math.max(8, Math.min(window.innerWidth - toolbarWidth - 8, rect.left + rect.width / 2 - toolbarWidth / 2));
+  richTextToolbar.style.left = `${left}px`;
+  richTextToolbar.style.top = `${Math.max(8, rect.top - 42)}px`;
+  richTextToolbar.classList.add('is-visible');
+}
+
+function hideRichTextToolbar() {
+  richTextToolbar?.classList.remove('is-visible');
+  activeRichTextEditor = null;
+}
+
 function renderCardContent(bodyEl, qa) {
   bodyEl.innerHTML = '';
 
   if (qa.type === 'textarea') {
-    const ta = document.createElement('textarea');
-    ta.value = qa.value || '';
-    ta.placeholder = '내용을 입력하세요.';
-    ta.addEventListener('input', (e) => { qa.value = e.target.value; });
-    bodyEl.appendChild(ta);
+    const editor = document.createElement('div');
+    editor.className = 'rich-text-editor';
+    editor.contentEditable = 'true';
+    editor.setAttribute('role', 'textbox');
+    editor.setAttribute('aria-multiline', 'true');
+    editor.dataset.placeholder = '내용을 입력하세요.';
+    // 기존 식별코드의 일반 텍스트는 안전하게 표시하고, 새 데이터만 서식 HTML을 사용한다.
+    editor.innerHTML = typeof qa.html === 'string'
+      ? sanitizeRichHtml(qa.html)
+      : escapeHtml(qa.value || '');
+    editor.addEventListener('input', () => {
+      qa.html = editor.innerHTML;
+      qa.value = editor.innerText;
+    });
+    bodyEl.appendChild(editor);
   } 
   else if (qa.type === 'list') {
     const listWrap = document.createElement('div');
@@ -1097,7 +1220,7 @@ function setupACommentComponent() {
   }
 
   btnAdd.onclick = () => {
-    const firstTextarea = container.querySelector('textarea');
+    const firstTextarea = container.querySelector('textarea, .rich-text-editor');
     const scale = Number.isFinite(state.aModuleSizes.comment.scale)
       ? state.aModuleSizes.comment.scale
       : 1;
@@ -1553,9 +1676,13 @@ function setupShareCode() {
       }
 
       if (data.tableWidthPercent) {
-        state.tableWidthPercent = data.tableWidthPercent;
+        // 예전 식별코드의 과도한 값도 현재 리사이저 범위 안에서 안전하게 복원한다.
+        const savedTableWidth = Number(data.tableWidthPercent);
+        state.tableWidthPercent = Number.isFinite(savedTableWidth)
+          ? Math.max(30, Math.min(70, savedTableWidth))
+          : 55;
         const tableWrap = document.getElementById('mod-table');
-        if (tableWrap && state.orientation === 'H') tableWrap.style.width = `${data.tableWidthPercent}%`;
+        if (tableWrap && state.orientation === 'H') tableWrap.style.width = `${state.tableWidthPercent}%`;
       }
 
       if (data.aModuleSizes && typeof data.aModuleSizes === 'object') {

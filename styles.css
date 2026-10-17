@@ -622,7 +622,8 @@ body.is-horizontal .toolbar-row {
   font-size: 0.78rem;
 }
 
-.qa-body textarea {
+.qa-body textarea,
+.qa-body .rich-text-editor {
   width: 100%;
   background: var(--input-bg);
   border: 1px solid var(--border);
@@ -635,6 +636,40 @@ body.is-horizontal .toolbar-row {
   outline: none;
   line-height: 1.4;
   box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.qa-body .rich-text-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--subtext);
+  pointer-events: none;
+}
+.rich-text-toolbar {
+  position: fixed;
+  display: none;
+  align-items: center;
+  gap: 3px;
+  z-index: 10000;
+  padding: 5px;
+  background: #0f172a;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42);
+}
+.rich-text-toolbar.is-visible { display: flex; }
+.rich-text-toolbar button {
+  min-width: 27px;
+  height: 27px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.rich-text-toolbar button:hover {
+  background: var(--accent);
+  color: #0b0f19;
 }
 
 .qa-body .list-inputs input {
@@ -1153,8 +1188,16 @@ body.is-horizontal .toolbar-row {
 
 .card-canvas.horizontal-mode .layout-a-table-wrap {
   width: 55%;
-  min-width: 320px;
+  min-width: 260px;
   max-width: 70%;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.card-canvas.horizontal-mode .layout-a-comment-wrap {
+  min-width: 240px;
+  flex: 1;
+  box-sizing: border-box;
 }
 
 .layout-a-table-wrap.has-bg {
@@ -1232,18 +1275,20 @@ body.is-horizontal .toolbar-row {
 
 .a-divider-resizer {
   display: none;
-}
-
-.card-canvas.horizontal-mode .a-divider-resizer {
-  display: flex;
   justify-content: center;
   align-items: center;
   width: 20px;
   cursor: col-resize;
   user-select: none;
-  z-index: 6;
-  flex-shrink: 0;
+  -webkit-user-select: none;
   touch-action: none;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.card-canvas.horizontal-mode .a-divider-resizer {
+  display: flex;
+  z-index: 10;
 }
 
 .divider-line {
@@ -1437,7 +1482,8 @@ body.is-horizontal .toolbar-row {
 }
 .card-canvas.horizontal-mode #qa-container input,
 .card-canvas.horizontal-mode #qa-container select,
-.card-canvas.horizontal-mode #qa-container textarea {
+.card-canvas.horizontal-mode #qa-container textarea,
+.card-canvas.horizontal-mode #qa-container .rich-text-editor {
   max-width: 100%;
 }
 
@@ -1648,6 +1694,7 @@ body.is-horizontal .action-footer {
 }
 .card-canvas.exporting input,
 .card-canvas.exporting textarea,
+.card-canvas.exporting .rich-text-editor,
 .card-canvas.exporting select {
   border-color: transparent !important;
   background-color: transparent !important;

@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAModuleResizers();
   setupACommentFitControl();
   setupModuleSizeReset();
+  setupModuleFitToCard();
   setupTableFitToggle();
   setupTableBgControl();
   setupTheme();
@@ -191,6 +192,7 @@ function applyLayout(mode) {
   const toolACommentFit = document.getElementById('tool-a-comment-fit-wrap');
   const toolBScale = document.getElementById('tool-b-scale-wrap');
   const btnResetModuleSizes = document.getElementById('btn-reset-module-sizes');
+  const btnFitModulesToCard = document.getElementById('btn-fit-modules-to-card');
 
   const isA = (mode === 'A');
 
@@ -205,6 +207,7 @@ function applyLayout(mode) {
   if (toolACommentFit) toolACommentFit.style.display = isA ? 'inline-flex' : 'none';
   if (toolBScale) toolBScale.style.display = isA ? 'none' : 'inline-flex';
   if (btnResetModuleSizes) btnResetModuleSizes.style.display = isA ? 'inline-flex' : 'none';
+  if (btnFitModulesToCard) btnFitModulesToCard.style.display = isA ? 'inline-flex' : 'none';
 
   const resizer = document.getElementById('a-resizer');
   if (resizer) {
@@ -604,6 +607,7 @@ function setupAModuleResizers() {
       const startY = e.clientY;
       const startRect = module.getBoundingClientRect();
       const containerRect = container.getBoundingClientRect();
+      const cardRect = module.closest('.card-canvas')?.getBoundingClientRect() || containerRect;
       const moduleSize = state.aModuleSizes[key];
       // 최초 조절 시의 크기를 기준점으로 보관한다. 누적 비율 대신 기준점으로
       // 계산해야 축소 후 다시 확대했을 때 내용 크기도 원래대로 돌아온다.
@@ -612,10 +616,19 @@ function setupAModuleResizers() {
       const isHorizontal = state.orientation === 'H';
 
       const onMouseMove = (moveEvt) => {
+        // 모듈의 오른쪽/아래쪽이 카드 배경을 벗어나지 않도록 현재 카드 경계로 제한한다.
+        const maxWidthPx = Math.max(
+          limits.minWidth,
+          Math.min(containerRect.right, cardRect.right) - startRect.left - 14
+        );
+        const maxHeightPx = Math.max(
+          limits.minHeight,
+          cardRect.bottom - startRect.top - 14
+        );
         const widthPx = isHorizontal
           ? startRect.width
-          : Math.max(limits.minWidth, Math.min(containerRect.width, startRect.width + moveEvt.clientX - startX));
-        const heightPx = Math.max(limits.minHeight, Math.min(1200, startRect.height + moveEvt.clientY - startY));
+          : Math.max(limits.minWidth, Math.min(maxWidthPx, startRect.width + moveEvt.clientX - startX));
+        const heightPx = Math.max(limits.minHeight, Math.min(maxHeightPx, startRect.height + moveEvt.clientY - startY));
         const nextScale = Math.max(0.2, Math.min(
           1,
           widthPx / moduleSize.baseWidth,
@@ -688,6 +701,8 @@ function applyACommentContentFit() {
 
   if (!enabled) {
     content.style.height = '';
+    content.querySelector('.a-comment-list')?.style.removeProperty('height');
+    content.querySelectorAll('.qa-card-item').forEach((card) => card.style.removeProperty('height'));
     content.querySelectorAll('textarea, .rich-text-editor').forEach(textarea => { textarea.style.height = ''; });
     return;
   }
@@ -701,11 +716,22 @@ function applyACommentContentFit() {
   const availableHeight = Math.max(80, module.clientHeight - dragBarHeight - verticalPadding - 10) / Math.max(scale, 0.1);
   const cards = content.querySelectorAll('.qa-card-item');
   const textareas = content.querySelectorAll('textarea, .rich-text-editor');
-  const headerAndGaps = cards.length * 56 + Math.max(0, cards.length - 1) * 12 + 42;
-  const textareaHeight = Math.max(65, Math.floor((availableHeight - headerAndGaps) / Math.max(textareas.length, 1)));
+  const addButton = content.querySelector('#btn-add-a-comment');
+  const addButtonHeight = addButton?.offsetHeight ?? 0;
+  const list = content.querySelector('.a-comment-list');
+  const listHeight = Math.max(65, availableHeight - addButtonHeight - 12);
+  const cardHeight = Math.max(65, Math.floor((listHeight - Math.max(0, cards.length - 1) * 12) / Math.max(cards.length, 1)));
   // 스케일된 컨텐츠 영역 자체에 높이를 부여해야 카드와 입력 영역이 남는 공간까지 채운다.
   content.style.height = `${Math.floor(availableHeight)}px`;
-  textareas.forEach(textarea => { textarea.style.height = `${textareaHeight}px`; });
+  if (list) list.style.height = `${Math.floor(listHeight)}px`;
+  cards.forEach((card) => { card.style.height = `${cardHeight}px`; });
+  // 상단 컨트롤의 실제 높이를 빼서 편집 영역을 남은 공간까지 정확히 채운다.
+  textareas.forEach((textarea) => {
+    const card = textarea.closest('.qa-card-item');
+    const topRowHeight = card?.querySelector('.qa-top-row')?.offsetHeight ?? 0;
+    const bodyPadding = 4;
+    textarea.style.height = `${Math.max(65, cardHeight - topRowHeight - bodyPadding)}px`;
+  });
 }
 
 function setupACommentAutoFitObserver() {
@@ -796,6 +822,36 @@ function setupModuleSizeReset() {
     });
     applyOrientation(state.orientation);
     applyACommentContentFit();
+  });
+}
+
+// 수동 리사이즈한 뒤에도 각 A 모듈이 카드 배경 안에서 끝나도록 일괄 보정한다.
+function setupModuleFitToCard() {
+  const button = document.getElementById('btn-fit-modules-to-card');
+  if (!button) return;
+
+  button.addEventListener('click', () => {
+    const card = document.getElementById('export-card');
+    if (!card) return;
+    const cardRect = card.getBoundingClientRect();
+    ['table', 'comment'].forEach((key) => {
+      const module = document.getElementById(key === 'table' ? 'mod-table' : 'mod-comment');
+      if (!module) return;
+      const rect = module.getBoundingClientRect();
+      const limits = A_MODULE_SIZE_LIMITS[key];
+      const maxHeight = Math.max(limits.minHeight, Math.floor(cardRect.bottom - rect.top - 14));
+      if (rect.height > maxHeight || key === 'comment') {
+        state.aModuleSizes[key].height = maxHeight;
+        module.style.height = `${maxHeight}px`;
+        module.style.flex = 'none';
+        module.style.alignSelf = 'flex-start';
+      }
+    });
+    state.aModuleSizes.comment.fitContent = true;
+    window.requestAnimationFrame(() => {
+      applyACommentContentFit();
+      trimACommentModuleBlankSpace();
+    });
   });
 }
 
@@ -972,7 +1028,6 @@ function setupRichTextToolbar() {
     if (event.target.closest('input[type="number"]')) {
       // 숫자 입력칸으로 포커스가 옮겨가는 동안 선택 범위를 보존한다.
       isRichToolbarInteracting = true;
-      window.setTimeout(() => { isRichToolbarInteracting = false; }, 0);
     }
   });
   richTextToolbar.addEventListener('click', (event) => {
@@ -991,6 +1046,7 @@ function setupRichTextToolbar() {
     restoreRichTextRange();
     document.execCommand('fontSize', false, String(size));
     activeRichTextEditor.dispatchEvent(new Event('input', { bubbles: true }));
+    isRichToolbarInteracting = false;
   });
 
   document.addEventListener('selectionchange', updateRichTextToolbar);
@@ -1002,7 +1058,8 @@ function setupRichTextToolbar() {
 function updateRichTextToolbar() {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-    if (isRichToolbarInteracting && activeRichTextEditor) return;
+    const toolbarOwnsFocus = richTextToolbar?.contains(document.activeElement);
+    if ((isRichToolbarInteracting || toolbarOwnsFocus) && activeRichTextEditor && activeRichTextRange) return;
     hideRichTextToolbar();
     return;
   }

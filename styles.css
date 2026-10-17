@@ -442,6 +442,8 @@ body.is-horizontal .toolbar-row {
   pointer-events: none;
   display: flex;
   flex-direction: column;
+  /* 가로형의 수동 모듈 크기가 캔버스 바깥/미리보기 위로 침범하지 않게 한다. */
+  overflow: hidden;
 }
 
 .card-content-layer input,

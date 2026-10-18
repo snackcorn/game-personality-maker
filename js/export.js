@@ -35,6 +35,59 @@ function replaceTextInputsForCapture(cardEl) {
   });
 }
 
+// B 타입 중앙선은 편집 화면의 실제 픽셀 좌표를 저장하지 않는다. 캡처용 복제 DOM에서
+// 편집 도구를 숨긴 뒤 카드 위치를 다시 읽어야 미리보기·PNG에서도 선이 정확히 맞는다.
+function rebuildBCenterDividersForCapture(cardEl) {
+  const container = cardEl.querySelector('#qa-container.has-center-lines');
+  if (!container) return;
+  container.querySelector('.b-center-divider-layer')?.remove();
+
+  const containerRect = container.getBoundingClientRect();
+  const cards = [...container.querySelectorAll('.qa-card-item')]
+    .map((card) => ({ rect: card.getBoundingClientRect() }))
+    .filter(({ rect }) => rect.width > 0 && rect.height > 0);
+  if (cards.length < 2) return;
+
+  const rows = [];
+  cards.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left).forEach((entry) => {
+    const row = rows.find((candidate) => Math.abs(candidate.top - entry.rect.top) < 4);
+    if (row) row.cards.push(entry);
+    else rows.push({ top: entry.rect.top, cards: [entry] });
+  });
+  rows.forEach((row) => row.cards.sort((a, b) => a.rect.left - b.rect.left));
+
+  const layer = cardEl.ownerDocument.createElement('div');
+  layer.className = 'b-center-divider-layer';
+  const addLine = (direction, style) => {
+    const line = cardEl.ownerDocument.createElement('i');
+    line.className = `b-center-divider is-${direction}`;
+    Object.assign(line.style, style);
+    layer.appendChild(line);
+  };
+
+  rows.forEach((row) => {
+    for (let index = 0; index < row.cards.length - 1; index += 1) {
+      const left = row.cards[index].rect;
+      const right = row.cards[index + 1].rect;
+      const x = ((left.right + right.left) / 2) - containerRect.left;
+      const top = Math.min(left.top, right.top) - containerRect.top;
+      const bottom = Math.max(left.bottom, right.bottom) - containerRect.top;
+      addLine('vertical', { left: `${x - 1}px`, top: `${top}px`, height: `${Math.max(0, bottom - top)}px` });
+    }
+  });
+
+  for (let index = 0; index < rows.length - 1; index += 1) {
+    const upper = rows[index].cards.map(({ rect }) => rect);
+    const lower = rows[index + 1].cards.map(({ rect }) => rect);
+    const y = ((Math.max(...upper.map((rect) => rect.bottom)) + Math.min(...lower.map((rect) => rect.top))) / 2) - containerRect.top;
+    const all = [...upper, ...lower];
+    const left = Math.min(...all.map((rect) => rect.left)) - containerRect.left;
+    const right = Math.max(...all.map((rect) => rect.right)) - containerRect.left;
+    addLine('horizontal', { left: `${left}px`, top: `${y - 1}px`, width: `${Math.max(0, right - left)}px` });
+  }
+  container.appendChild(layer);
+}
+
 /** 편집 UI를 제거한 카드 이미지를 Data URL로 렌더링한다. */
 export async function createCardPreview(cardElementId) {
   const cardEl = document.getElementById(cardElementId);
@@ -53,6 +106,7 @@ export async function createCardPreview(cardElementId) {
       if (clonedCard) {
         expandTextareasForCapture(clonedCard);
         replaceTextInputsForCapture(clonedCard);
+        rebuildBCenterDividersForCapture(clonedCard);
       }
     }
   });
@@ -80,6 +134,7 @@ export async function exportCardAsPNG(cardElementId, fileName = 'gaming_personal
         if (clonedCard) {
           expandTextareasForCapture(clonedCard);
           replaceTextInputsForCapture(clonedCard);
+          rebuildBCenterDividersForCapture(clonedCard);
         }
       }
     });

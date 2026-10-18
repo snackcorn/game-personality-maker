@@ -3,7 +3,7 @@ import { generateCode, parseCode } from './storage.js';
 import { createCardPreview, exportCardAsPNG } from './export.js';
 
 // 기능 수정 시 이 번호를 올리면 페이지 상단 표기도 함께 갱신된다.
-const APP_VERSION = '1.0.4';
+const APP_VERSION = '1.0.5';
 
 const A_MODULE_SIZE_LIMITS = {
   table: { minWidth: 320, minHeight: 180 },
@@ -24,6 +24,7 @@ const state = {
   profileSize: 'normal',
   bInputScale: 'normal',
   bCenterLine: false,
+  bGridSplitPercent: 50,
   theme: 'cyber',
   
   customColors: {
@@ -104,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupMatrixTable();
   setupQAComponent();
   setupBCenterLineControl();
+  setupBGridResizer();
   setupModuleDragAndDrop();
   setupShareCode();
   setupLivePreview();
@@ -221,7 +223,10 @@ function applyLayout(mode) {
     resizer.style.display = (isA && state.showAComment && state.orientation === 'H') ? 'flex' : 'none';
   }
   if (isA) window.requestAnimationFrame(applyACommentContentFit);
-  window.requestAnimationFrame(scheduleBCenterDividers);
+  window.requestAnimationFrame(() => {
+    applyBGridSplit();
+    scheduleBCenterDividers();
+  });
 }
 
 // 3. 가로/세로 방향 전환
@@ -262,6 +267,7 @@ function applyOrientation(orient, preserveModuleSizes = false) {
   // 표 너비 리사이즈 값은 가로 모드 전용이다. 세로 모드에서는 100% 폭을 사용한다.
   syncAHorizontalModuleSplit();
   applyAModuleSizes();
+  applyBGridSplit();
   scheduleBCenterDividers();
   // 배경 맞춤을 사용 중인 상태에서 가로/세로를 바꿔도 모듈이 새 배경 범위를 넘지 않게 한다.
   if (card?.classList.contains('module-fit-locked')) fitAModulesToBackground(card);
@@ -1482,6 +1488,24 @@ function updateBCenterLineButton() {
     button.textContent = state.bCenterLine ? '✓ 중앙선' : '＋ 중앙선';
   }
   container?.classList.toggle('has-center-lines', state.bCenterLine);
+  applyBGridSplit();
+}
+
+// B 타입의 세로 중앙선도 A 타입과 같은 방식으로 카드 폭 비율을 관리한다.
+function applyBGridSplit() {
+  const container = document.getElementById('qa-container');
+  const resizer = document.getElementById('b-resizer');
+  const layout = document.getElementById('layout-b');
+  if (!container || !resizer || !layout) return;
+
+  const percent = Math.max(30, Math.min(70, Number(state.bGridSplitPercent) || 50));
+  state.bGridSplitPercent = percent;
+  container.style.setProperty('--b-split', `${percent}%`);
+
+  // 리사이저는 Q&A 그리드의 실제 위치/높이만 덮어 헤더나 추가 버튼을 가리지 않는다.
+  resizer.style.left = `${container.offsetLeft + (container.clientWidth * percent / 100) - 10}px`;
+  resizer.style.top = `${container.offsetTop}px`;
+  resizer.style.height = `${container.clientHeight}px`;
 }
 
 function renderBCenterDividers() {
@@ -1539,7 +1563,10 @@ function renderBCenterDividers() {
 }
 
 function scheduleBCenterDividers() {
-  window.requestAnimationFrame(renderBCenterDividers);
+  window.requestAnimationFrame(() => {
+    applyBGridSplit();
+    renderBCenterDividers();
+  });
 }
 
 function setupBCenterLineControl() {
@@ -1559,6 +1586,41 @@ function setupBCenterLineControl() {
   if (window.ResizeObserver) new ResizeObserver(scheduleBCenterDividers).observe(container);
   window.addEventListener('resize', scheduleBCenterDividers);
   updateBCenterLineButton();
+}
+
+function setupBGridResizer() {
+  const resizer = document.getElementById('b-resizer');
+  const container = document.getElementById('qa-container');
+  if (!resizer || !container) return;
+
+  let activePointerId = null;
+  const stopResize = (event) => {
+    if (activePointerId === null || (event && event.pointerId !== activePointerId)) return;
+    if (resizer.hasPointerCapture(activePointerId)) resizer.releasePointerCapture(activePointerId);
+    activePointerId = null;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+
+  resizer.addEventListener('pointerdown', (event) => {
+    if (state.layout !== 'B' || state.orientation !== 'H' || !state.bCenterLine || event.button !== 0) return;
+    event.preventDefault();
+    activePointerId = event.pointerId;
+    resizer.setPointerCapture(activePointerId);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  resizer.addEventListener('pointermove', (event) => {
+    if (activePointerId === null || event.pointerId !== activePointerId) return;
+    const rect = container.getBoundingClientRect();
+    if (!rect.width) return;
+    state.bGridSplitPercent = Math.max(30, Math.min(70, ((event.clientX - rect.left) / rect.width) * 100));
+    applyBGridSplit();
+    renderBCenterDividers();
+  });
+  resizer.addEventListener('pointerup', stopResize);
+  resizer.addEventListener('pointercancel', stopResize);
+  applyBGridSplit();
 }
 
 // 12. 테마 프리셋 전환
@@ -1894,6 +1956,7 @@ function setupShareCode() {
       profileSize: state.profileSize,
       bInputScale: state.bInputScale,
       bCenterLine: state.bCenterLine,
+      bGridSplitPercent: state.bGridSplitPercent,
       profilePos: state.profilePos,
       profileDivider: state.profileDivider,
       profileBg: state.profileBg,
@@ -1960,6 +2023,13 @@ function setupShareCode() {
       if (data.bCenterLine !== undefined) {
         state.bCenterLine = Boolean(data.bCenterLine);
         updateBCenterLineButton();
+      }
+      if (data.bGridSplitPercent !== undefined) {
+        const savedSplit = Number(data.bGridSplitPercent);
+        state.bGridSplitPercent = Number.isFinite(savedSplit)
+          ? Math.max(30, Math.min(70, savedSplit))
+          : 50;
+        applyBGridSplit();
       }
 
       if (data.profilePos) state.profilePos = data.profilePos;

@@ -3,7 +3,7 @@ import { generateCode, parseCode } from './storage.js';
 import { createCardPreview, exportCardAsPNG } from './export.js';
 
 // 기능 수정 시 이 번호를 올리면 페이지 상단 표기도 함께 갱신된다.
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.4';
 
 const A_MODULE_SIZE_LIMITS = {
   table: { minWidth: 320, minHeight: 180 },
@@ -260,12 +260,33 @@ function applyOrientation(orient, preserveModuleSizes = false) {
   }
 
   // 표 너비 리사이즈 값은 가로 모드 전용이다. 세로 모드에서는 100% 폭을 사용한다.
-  const tableWrap = document.getElementById('mod-table');
-  if (tableWrap) tableWrap.style.width = isH ? `${state.tableWidthPercent}%` : '';
+  syncAHorizontalModuleSplit();
   applyAModuleSizes();
   scheduleBCenterDividers();
   // 배경 맞춤을 사용 중인 상태에서 가로/세로를 바꿔도 모듈이 새 배경 범위를 넘지 않게 한다.
   if (card?.classList.contains('module-fit-locked')) fitAModulesToBackground(card);
+}
+
+// A 타입 가로형은 중앙선이 관리하는 비율을 flex-basis에 즉시 반영해 두 모듈이
+// 카드의 유효 너비를 빈틈없이 나눠 갖는다.
+function syncAHorizontalModuleSplit() {
+  const table = document.getElementById('mod-table');
+  const comment = document.getElementById('mod-comment');
+  if (!table || !comment) return;
+
+  if (state.orientation !== 'H') {
+    table.style.flexBasis = '';
+    if (!Number.isFinite(state.aModuleSizes.table.height)) table.style.flex = '';
+    if (!Number.isFinite(state.aModuleSizes.comment.height)) comment.style.flex = '';
+    return;
+  }
+
+  const percent = Math.max(30, Math.min(70, Number(state.tableWidthPercent) || 55));
+  state.tableWidthPercent = percent;
+  table.style.flex = `0 0 ${percent}%`;
+  table.style.width = `${percent}%`;
+  comment.style.flex = '1 1 0';
+  comment.style.width = '';
 }
 
 function setupLayoutSwitch() {
@@ -553,7 +574,7 @@ function setupTableResizer() {
     const safeMaxWidth = Math.max(minWidth, maxWidth);
     const clampedWidth = Math.max(minWidth, Math.min(safeMaxWidth, cursorWidth));
     state.tableWidthPercent = (clampedWidth / containerRect.width) * 100;
-    tableWrap.style.width = `${state.tableWidthPercent}%`;
+    syncAHorizontalModuleSplit();
     // 가로 분할 비율 변화로 남는 세로 공간은 입력 영역이 즉시 채운다.
     window.requestAnimationFrame(applyACommentContentFit);
   };
@@ -641,9 +662,9 @@ function setupAModuleResizers() {
           state.aModuleSizes[key].height = Math.round(heightPx);
           state.aModuleSizes[key].scale = nextScale;
           module.style.height = `${state.aModuleSizes[key].height}px`;
-          module.style.flex = 'none';
           module.style.alignSelf = 'flex-start';
           applyAModuleContentScale(module, nextScale);
+          syncAHorizontalModuleSplit();
           if (key === 'comment') window.requestAnimationFrame(applyACommentContentFit);
           return;
         }
@@ -718,6 +739,8 @@ function applyACommentContentFit() {
   const checkbox = document.getElementById('chk-a-comment-fit');
   const content = module?.querySelector('.a-module-content-scale');
   if (!module || !content) return;
+  // 입력창 맞춤 전에 가로형 모듈의 폭 분할을 먼저 동기화한다.
+  if (state.orientation === 'H') syncAHorizontalModuleSplit();
 
   // 가로형은 두 모듈의 높이가 같아지므로, 입력창 맞춤을 자동 적용해 하단 빈 공간을 없앤다.
   const autoFitInHorizontal = state.orientation === 'H';
@@ -897,6 +920,7 @@ function fitAModulesToBackground(card) {
     });
 
     state.aModuleSizes.comment.fitContent = true;
+    syncAHorizontalModuleSplit();
     applyACommentContentFit();
     trimACommentModuleBlankSpace();
   });
@@ -926,11 +950,12 @@ function applyAModuleSizes() {
     }
     if (Number.isFinite(size.height)) {
       module.style.height = `${size.height}px`;
-      module.style.flex = 'none';
+      if (state.orientation !== 'H') module.style.flex = 'none';
       module.style.alignSelf = 'flex-start';
     }
     applyAModuleContentScale(module, Number.isFinite(size.scale) ? size.scale : 1);
   });
+  syncAHorizontalModuleSplit();
   applyACommentContentFit();
   window.requestAnimationFrame(trimACommentModuleBlankSpace);
 }
@@ -1788,9 +1813,12 @@ function bindDragEvents(container, itemSelector, checkHorizontal) {
   container.addEventListener('mousedown', (e) => {
     const handle = e.target.closest('.module-drag-bar');
     const targetItem = e.target.closest(itemSelector);
-    if (targetItem && targetItem.parentNode === container) {
-      targetItem.draggable = !!handle;
-    }
+    // 모듈 헤더의 빈 영역 또는 드래그 아이콘에서 시작한 경우만 모듈 이동을 허용한다.
+    // 입력 카드·버튼·스티커에서 올라온 이벤트는 부모 모듈의 dragstart로 승격되지 않는다.
+    const isDirectHandleTarget = e.target === handle || e.target.classList.contains('drag-handle-icon');
+    if (!targetItem || targetItem.parentNode !== container) return;
+    targetItem.draggable = isDirectHandleTarget;
+    if (!isDirectHandleTarget) return;
   });
 
   container.addEventListener('dragstart', (e) => {
@@ -1968,8 +1996,7 @@ function setupShareCode() {
         state.tableWidthPercent = Number.isFinite(savedTableWidth)
           ? Math.max(30, Math.min(70, savedTableWidth))
           : 55;
-        const tableWrap = document.getElementById('mod-table');
-        if (tableWrap && state.orientation === 'H') tableWrap.style.width = `${state.tableWidthPercent}%`;
+        syncAHorizontalModuleSplit();
       }
 
       if (data.aModuleSizes && typeof data.aModuleSizes === 'object') {

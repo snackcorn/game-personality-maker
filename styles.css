@@ -346,7 +346,9 @@ body.is-horizontal .toolbar-row {
   --background-fit-height: 580px;
   width: 100%;
   max-width: 780px;
-  min-height: var(--background-fit-height);
+  /* 기본 캔버스는 콘텐츠를 자연스럽게 수용한다. 고정 배경 맞춤은 아래 전용 클래스에서만 적용한다. */
+  min-height: auto;
+  height: auto;
   background-color: var(--canvas-bg) !important;
   border: 2px solid var(--border);
   border-radius: 16px;
@@ -360,7 +362,7 @@ body.is-horizontal .toolbar-row {
 
 .card-canvas.horizontal-mode {
   max-width: 1040px;
-  min-height: var(--background-fit-height);
+  min-height: auto;
   height: auto;
   overflow: visible;
 }
@@ -454,8 +456,8 @@ body.is-horizontal .toolbar-row {
   pointer-events: none;
   display: flex;
   flex-direction: column;
-  /* 가로형의 수동 모듈 크기가 캔버스 바깥/미리보기 위로 침범하지 않게 한다. */
-  overflow: hidden;
+  /* 기본 모드에서는 늘어난 입력창을 캔버스가 자연스럽게 수용한다. */
+  overflow: visible;
 }
 
 .card-content-layer input,
@@ -1097,10 +1099,32 @@ body.is-horizontal .toolbar-row {
   padding: 12px;
   box-sizing: border-box;
   overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+.layout-a-comment-wrap,
+#layout-b {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+.card-canvas:not(.horizontal-mode) .layout-a-table-wrap,
+.card-canvas:not(.horizontal-mode) .layout-a-comment-wrap {
+  width: 100% !important;
+  box-sizing: border-box;
+}
+.card-canvas:not(.horizontal-mode) .draggable-module {
+  width: 100%;
+  box-sizing: border-box;
 }
 .a-module-content-scale {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   transform-origin: top left;
   min-width: 0;
+  width: 100%;
 }
 .a-module-resize-handle {
   position: absolute;
@@ -1414,6 +1438,8 @@ body.is-horizontal .toolbar-row {
 .btn-add-table-row {
   width: 100%;
   margin-top: 8px;
+  flex-shrink: 0;
+  box-sizing: border-box;
   padding: 7px;
   background: transparent;
   border: 1px dashed var(--accent);
@@ -1493,6 +1519,7 @@ body.is-horizontal .toolbar-row {
 .a-comment-list {
   display: flex !important;
   flex-direction: column !important;
+  flex: 1 1 auto;
   gap: 12px;
   width: 100% !important;
 }
@@ -1514,6 +1541,9 @@ body.is-horizontal .toolbar-row {
   gap: 14px;
   min-width: 0;
   position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* B 타입 중앙선은 실제 카드의 간격 중앙에만 그려서 2·3·4개 이상 모두 대응한다. */
@@ -1572,14 +1602,17 @@ body.is-horizontal .toolbar-row {
   max-width: 100%;
 }
 
-/* 홀수(3·5·…) 장은 첫 카드를 전체 폭으로 두고 나머지를 2열로 배치한다. */
-.card-canvas.horizontal-mode #qa-container .qa-card-item:first-child:nth-last-child(odd) {
+/* 홀수 장은 마지막 카드를 전체 폭으로 두어 배경의 남는 폭을 없앤다. */
+.card-canvas.horizontal-mode #qa-container .qa-card-item:last-child:nth-child(odd) {
   grid-column: 1 / -1;
+  width: 100%;
 }
 
 .btn-add-card {
   width: 100%;
   margin-top: 10px;
+  flex-shrink: 0;
+  box-sizing: border-box;
   padding: 8px;
   background: transparent;
   border: 1px dashed var(--accent);
@@ -1862,7 +1895,7 @@ body.is-horizontal .action-footer {
     max-width: 48px !important;
   }
   .card-canvas.horizontal-mode #qa-container { grid-template-columns: minmax(0, 1fr); }
-  .card-canvas.horizontal-mode #qa-container .qa-card-item:first-child:nth-last-child(odd) { grid-column: auto; }
+  .card-canvas.horizontal-mode #qa-container .qa-card-item:last-child:nth-child(odd) { grid-column: auto; }
   .action-footer { margin-top: 16px; }
 }
 

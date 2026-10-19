@@ -470,6 +470,7 @@ body.is-horizontal .toolbar-row {
 .card-content-layer .layout-a-comment-wrap,
 .card-content-layer .a-divider-resizer,
 .card-content-layer .b-divider-resizer,
+.card-content-layer .b-row-resizer,
 .card-content-layer .module-drag-bar,
 .card-content-layer .profile-toolbar,
 .card-content-layer .table-hover-toolbar {
@@ -1112,7 +1113,7 @@ body.is-horizontal .toolbar-row {
 }
 .card-canvas:not(.horizontal-mode) .layout-a-table-wrap,
 .card-canvas:not(.horizontal-mode) .layout-a-comment-wrap {
-  width: 100% !important;
+  width: 100%;
   box-sizing: border-box;
 }
 .card-canvas:not(.horizontal-mode) .draggable-module {
@@ -1507,6 +1508,15 @@ body.is-horizontal .toolbar-row {
 .layout-a-comment-wrap.is-content-fitted .qa-body {
   flex: 1;
 }
+.layout-a-comment-wrap.is-content-fitted .a-comment-list,
+.layout-a-comment-wrap.is-content-fitted .qa-card-item,
+.layout-a-comment-wrap.is-content-fitted .qa-body {
+  min-height: 0;
+}
+.layout-a-comment-wrap.is-content-fitted .a-comment-list > .qa-card-item:only-child,
+.layout-a-comment-wrap.is-content-fitted .a-comment-list > .qa-card-item:only-child .qa-body {
+  height: 100%;
+}
 .layout-a-comment-wrap.is-content-fitted .qa-body .rich-text-editor {
   flex: 1;
   min-height: 65px;
@@ -1593,6 +1603,34 @@ body.is-horizontal .toolbar-row {
   height: 100%;
   background: var(--accent);
   opacity: 0.35;
+}
+.b-row-resizer {
+  display: none;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+  z-index: 4;
+}
+.card-canvas:not(.horizontal-mode) #qa-container.vertical-split-active + .b-divider-resizer + .b-row-resizer {
+  display: flex;
+}
+.b-row-resizer .divider-line {
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.35;
+}
+.card-canvas:not(.horizontal-mode) #qa-container.vertical-split-active {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, calc(var(--b-row-split) - 7px)) minmax(0, calc(100% - var(--b-row-split) - 7px));
+  gap: 14px;
 }
 
 /* 분할 편집 화면의 좁은 B 타입 카드에서도 내용이 바깥으로 밀려나지 않게 한다. */
@@ -1816,6 +1854,7 @@ body.is-horizontal .action-footer {
 .card-canvas.exporting .img-rotate-handle,
 .card-canvas.exporting .a-module-resize-handle,
 .card-canvas.exporting .b-divider-resizer,
+.card-canvas.exporting .b-row-resizer,
 .card-canvas.exporting .dropdown-editor-wrap,
 .card-canvas.exporting .qa-dropdown-select,
 .card-canvas.exporting .th-del-action,

@@ -3,7 +3,7 @@ import { generateCode, parseCode } from './storage.js';
 import { createCardPreview, exportCardAsPNG } from './export.js';
 
 // 기능 수정 시 이 번호를 올리면 페이지 상단 표기도 함께 갱신된다.
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.9';
 
 const A_MODULE_SIZE_LIMITS = {
   table: { minWidth: 320, minHeight: 180 },
@@ -25,6 +25,8 @@ const state = {
   bInputScale: 'normal',
   bCenterLine: false,
   bGridSplitPercent: 50,
+  bRowSplitPercent: 50,
+  bVerticalSplitHeight: null,
   theme: 'cyber',
   
   customColors: {
@@ -244,6 +246,7 @@ function applyOrientation(orient, preserveModuleSizes = false) {
   if (card) card.classList.toggle('horizontal-mode', isH);
   if (document.body) document.body.classList.toggle('is-horizontal', isH);
   if (resizer) resizer.style.display = (state.layout === 'A' && state.showAComment && isH) ? 'flex' : 'none';
+  if (isH) state.aModuleSizes.comment.fitContent = true;
 
   // 방향이 바뀌면 이전 방향의 수동 픽셀 크기는 새 축에서 유효하지 않아
   // 모듈이 카드 밖으로 튀어나온다. 사용자 클릭 전환에서는 안전한 기본값으로 되돌린다.
@@ -675,15 +678,15 @@ function setupAModuleResizers() {
           return;
         }
 
-        // 모듈의 오른쪽/아래쪽이 카드 배경을 벗어나지 않도록 현재 카드 경계로 제한한다.
+        // 세로형은 기존처럼 모서리 드래그로 폭·높이를 모두 조절한다.
+        const isBackgroundLocked = module.closest('.card-canvas')?.classList.contains('module-fit-locked');
         const maxWidthPx = Math.max(
           limits.minWidth,
           Math.min(containerRect.right, cardRect.right) - startRect.left - 14
         );
-        const maxHeightPx = Math.max(
-          limits.minHeight,
-          cardRect.bottom - startRect.top - 14
-        );
+        const maxHeightPx = isBackgroundLocked
+          ? Math.max(limits.minHeight, cardRect.bottom - startRect.top - 14)
+          : Number.POSITIVE_INFINITY;
         const widthPx = Math.max(limits.minWidth, Math.min(maxWidthPx, startRect.width + moveEvt.clientX - startX));
         const heightPx = Math.max(limits.minHeight, Math.min(maxHeightPx, startRect.height + moveEvt.clientY - startY));
         const nextScale = Math.max(0.2, Math.min(
@@ -692,12 +695,10 @@ function setupAModuleResizers() {
           heightPx / moduleSize.baseHeight
         ));
 
-        if (!isHorizontal) {
-          state.aModuleSizes[key].width = Math.round((widthPx / containerRect.width) * 1000) / 10;
-          module.style.width = `${state.aModuleSizes[key].width}%`;
-        }
+        state.aModuleSizes[key].width = Math.round((widthPx / containerRect.width) * 1000) / 10;
         state.aModuleSizes[key].height = Math.round(heightPx);
         state.aModuleSizes[key].scale = nextScale;
+        module.style.width = `${state.aModuleSizes[key].width}%`;
         module.style.height = `${state.aModuleSizes[key].height}px`;
         module.style.flex = 'none';
         module.style.alignSelf = 'flex-start';
@@ -750,6 +751,7 @@ function applyACommentContentFit() {
 
   // 가로형은 두 모듈의 높이가 같아지므로, 입력창 맞춤을 자동 적용해 하단 빈 공간을 없앤다.
   const autoFitInHorizontal = state.orientation === 'H';
+  if (autoFitInHorizontal) state.aModuleSizes.comment.fitContent = true;
   const enabled = Boolean(state.aModuleSizes.comment.fitContent) || autoFitInHorizontal;
   module.classList.toggle('is-content-fitted', enabled);
   if (button) {
@@ -830,7 +832,7 @@ function trimACommentModuleBlankSpace() {
 function growACommentModuleForNewCard(currentTextareaHeight = 65) {
   const module = document.getElementById('mod-comment');
   const size = state.aModuleSizes.comment;
-  if (!module || !Number.isFinite(size.height)) return;
+  if (!module) return;
   // 고정 배경 안에서는 새 입력창을 추가해도 카드 배경을 키우지 않고 내부 영역에 맞춘다.
   if (module.closest('.card-canvas')?.classList.contains('module-fit-locked')) {
     applyACommentContentFit();
@@ -840,8 +842,16 @@ function growACommentModuleForNewCard(currentTextareaHeight = 65) {
   const scale = Number.isFinite(size.scale) ? size.scale : 1;
   const newCardHeight = 56 + 12 + Math.max(65, currentTextareaHeight);
   const addedHeight = Math.ceil(newCardHeight * Math.max(scale, 0.2));
-  size.height += addedHeight;
+  // 가로형의 자동 맞춤은 기본 높이를 가진 상태에서 시작하므로, 수동 리사이즈를
+  // 하지 않았어도 현재 높이를 기준으로 새 창 공간을 확보한다.
+  const currentHeight = Number.isFinite(size.height)
+    ? size.height
+    : Math.ceil(module.getBoundingClientRect().height);
+  size.height = currentHeight + addedHeight;
   module.style.height = `${size.height}px`;
+  module.style.alignSelf = 'flex-start';
+  if (state.orientation !== 'H') module.style.flex = 'none';
+  else syncAHorizontalModuleSplit();
 }
 
 function applyAModuleContentScale(module, scale = 1) {
@@ -1428,6 +1438,7 @@ function setupACommentComponent() {
   if (!container || !btnAdd) return;
 
   function render() {
+    if (state.qaList.length !== 2) state.bVerticalSplitHeight = null;
     container.innerHTML = '';
     state.aCommentList.forEach((item, idx) => {
       const card = createMovableCard(item, idx, state.aCommentList, render);
@@ -1495,8 +1506,9 @@ function updateBCenterLineButton() {
 function applyBGridSplit() {
   const container = document.getElementById('qa-container');
   const resizer = document.getElementById('b-resizer');
+  const rowResizer = document.getElementById('b-row-resizer');
   const layout = document.getElementById('layout-b');
-  if (!container || !resizer || !layout) return;
+  if (!container || !resizer || !rowResizer || !layout) return;
 
   const percent = Math.max(30, Math.min(70, Number(state.bGridSplitPercent) || 50));
   state.bGridSplitPercent = percent;
@@ -1506,6 +1518,29 @@ function applyBGridSplit() {
   resizer.style.left = `${container.offsetLeft + (container.clientWidth * percent / 100) - 10}px`;
   resizer.style.top = `${container.offsetTop}px`;
   resizer.style.height = `${container.clientHeight}px`;
+
+  const cards = container.querySelectorAll('.qa-card-item');
+  const canSplitVertically = state.orientation === 'V' && state.bCenterLine && cards.length === 2;
+  container.classList.toggle('vertical-split-active', canSplitVertically);
+  if (!canSplitVertically) {
+    container.style.removeProperty('--b-row-split');
+    container.style.removeProperty('height');
+    state.bVerticalSplitHeight = null;
+    return;
+  }
+
+  // 세로형의 위/아래 분할은 두 카드의 현재 자연 높이를 총 높이로 삼아, 내용이
+  // 늘어났을 때도 캔버스 바깥으로 나가지 않고 같은 영역 안에서 비율만 바꾼다.
+  if (!Number.isFinite(state.bVerticalSplitHeight) || state.bVerticalSplitHeight <= 0) {
+    state.bVerticalSplitHeight = container.getBoundingClientRect().height;
+  }
+  const rowPercent = Math.max(30, Math.min(70, Number(state.bRowSplitPercent) || 50));
+  state.bRowSplitPercent = rowPercent;
+  container.style.setProperty('--b-row-split', `${rowPercent}%`);
+  container.style.height = `${state.bVerticalSplitHeight}px`;
+  rowResizer.style.left = `${container.offsetLeft}px`;
+  rowResizer.style.top = `${container.offsetTop + (container.clientHeight * rowPercent / 100) - 10}px`;
+  rowResizer.style.width = `${container.clientWidth}px`;
 }
 
 function renderBCenterDividers() {
@@ -1590,8 +1625,9 @@ function setupBCenterLineControl() {
 
 function setupBGridResizer() {
   const resizer = document.getElementById('b-resizer');
+  const rowResizer = document.getElementById('b-row-resizer');
   const container = document.getElementById('qa-container');
-  if (!resizer || !container) return;
+  if (!resizer || !rowResizer || !container) return;
 
   let activePointerId = null;
   const stopResize = (event) => {
@@ -1620,6 +1656,33 @@ function setupBGridResizer() {
   });
   resizer.addEventListener('pointerup', stopResize);
   resizer.addEventListener('pointercancel', stopResize);
+
+  let activeRowPointerId = null;
+  const stopRowResize = (event) => {
+    if (activeRowPointerId === null || (event && event.pointerId !== activeRowPointerId)) return;
+    if (rowResizer.hasPointerCapture(activeRowPointerId)) rowResizer.releasePointerCapture(activeRowPointerId);
+    activeRowPointerId = null;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+  rowResizer.addEventListener('pointerdown', (event) => {
+    if (state.layout !== 'B' || state.orientation !== 'V' || !state.bCenterLine || container.querySelectorAll('.qa-card-item').length !== 2 || event.button !== 0) return;
+    event.preventDefault();
+    activeRowPointerId = event.pointerId;
+    rowResizer.setPointerCapture(activeRowPointerId);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  });
+  rowResizer.addEventListener('pointermove', (event) => {
+    if (activeRowPointerId === null || event.pointerId !== activeRowPointerId) return;
+    const rect = container.getBoundingClientRect();
+    if (!rect.height) return;
+    state.bRowSplitPercent = Math.max(30, Math.min(70, ((event.clientY - rect.top) / rect.height) * 100));
+    applyBGridSplit();
+    renderBCenterDividers();
+  });
+  rowResizer.addEventListener('pointerup', stopRowResize);
+  rowResizer.addEventListener('pointercancel', stopRowResize);
   applyBGridSplit();
 }
 
@@ -1957,6 +2020,7 @@ function setupShareCode() {
       bInputScale: state.bInputScale,
       bCenterLine: state.bCenterLine,
       bGridSplitPercent: state.bGridSplitPercent,
+      bRowSplitPercent: state.bRowSplitPercent,
       profilePos: state.profilePos,
       profileDivider: state.profileDivider,
       profileBg: state.profileBg,
@@ -2029,6 +2093,14 @@ function setupShareCode() {
         state.bGridSplitPercent = Number.isFinite(savedSplit)
           ? Math.max(30, Math.min(70, savedSplit))
           : 50;
+        applyBGridSplit();
+      }
+      if (data.bRowSplitPercent !== undefined) {
+        const savedRowSplit = Number(data.bRowSplitPercent);
+        state.bRowSplitPercent = Number.isFinite(savedRowSplit)
+          ? Math.max(30, Math.min(70, savedRowSplit))
+          : 50;
+        state.bVerticalSplitHeight = null;
         applyBGridSplit();
       }
 

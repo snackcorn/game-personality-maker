@@ -3,7 +3,7 @@ import { generateCode, parseCode } from './storage.js';
 import { createCardPreview, exportCardAsPNG } from './export.js';
 
 // 기능 수정 시 이 번호를 올리면 페이지 상단 표기도 함께 갱신된다.
-const APP_VERSION = '1.0.9';
+const APP_VERSION = '1.0.10';
 
 const A_MODULE_SIZE_LIMITS = {
   table: { minWidth: 320, minHeight: 180 },
@@ -99,7 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAModuleResizers();
   setupACommentFitControl();
   setupModuleSizeReset();
-  setupModuleFitToCard();
   setupTableFitToggle();
   setupTableBgControl();
   setupTheme();
@@ -203,7 +202,6 @@ function applyLayout(mode) {
   const toolACommentFit = document.getElementById('tool-a-comment-fit-wrap');
   const toolBScale = document.getElementById('tool-b-scale-wrap');
   const btnResetModuleSizes = document.getElementById('btn-reset-module-sizes');
-  const btnFitModulesToCard = document.getElementById('btn-fit-modules-to-card');
 
   const isA = (mode === 'A');
 
@@ -218,7 +216,6 @@ function applyLayout(mode) {
   if (toolACommentFit) toolACommentFit.style.display = isA ? 'inline-flex' : 'none';
   if (toolBScale) toolBScale.style.display = isA ? 'none' : 'inline-flex';
   if (btnResetModuleSizes) btnResetModuleSizes.style.display = isA ? 'inline-flex' : 'none';
-  if (btnFitModulesToCard) btnFitModulesToCard.style.display = isA ? 'inline-flex' : 'none';
 
   const resizer = document.getElementById('a-resizer');
   if (resizer) {
@@ -272,8 +269,6 @@ function applyOrientation(orient, preserveModuleSizes = false) {
   applyAModuleSizes();
   applyBGridSplit();
   scheduleBCenterDividers();
-  // 배경 맞춤을 사용 중인 상태에서 가로/세로를 바꿔도 모듈이 새 배경 범위를 넘지 않게 한다.
-  if (card?.classList.contains('module-fit-locked')) fitAModulesToBackground(card);
 }
 
 // A 타입 가로형은 중앙선이 관리하는 비율을 flex-basis에 즉시 반영해 두 모듈이
@@ -679,14 +674,13 @@ function setupAModuleResizers() {
         }
 
         // 세로형은 기존처럼 모서리 드래그로 폭·높이를 모두 조절한다.
-        const isBackgroundLocked = module.closest('.card-canvas')?.classList.contains('module-fit-locked');
         const maxWidthPx = Math.max(
           limits.minWidth,
           Math.min(containerRect.right, cardRect.right) - startRect.left - 14
         );
-        const maxHeightPx = isBackgroundLocked
-          ? Math.max(limits.minHeight, cardRect.bottom - startRect.top - 14)
-          : Number.POSITIVE_INFINITY;
+        // 캔버스는 콘텐츠를 수용하는 배경이므로, 세로형 수동 조절로 배경을
+        // 강제로 줄이거나 잘라내지 않는다.
+        const maxHeightPx = Number.POSITIVE_INFINITY;
         const widthPx = Math.max(limits.minWidth, Math.min(maxWidthPx, startRect.width + moveEvt.clientX - startX));
         const heightPx = Math.max(limits.minHeight, Math.min(maxHeightPx, startRect.height + moveEvt.clientY - startY));
         const nextScale = Math.max(0.2, Math.min(
@@ -728,12 +722,10 @@ function setupACommentFitControl() {
     const commentSize = state.aModuleSizes.comment;
     commentSize.fitContent = !commentSize.fitContent;
     applyACommentContentFit();
-    window.requestAnimationFrame(trimACommentModuleBlankSpace);
   });
   checkbox?.addEventListener('change', (e) => {
     state.aModuleSizes.comment.fitContent = e.target.checked;
     applyACommentContentFit();
-    window.requestAnimationFrame(trimACommentModuleBlankSpace);
   });
   applyACommentContentFit();
 }
@@ -749,7 +741,8 @@ function applyACommentContentFit() {
   // 입력창 맞춤 전에 가로형 모듈의 폭 분할을 먼저 동기화한다.
   if (state.orientation === 'H') syncAHorizontalModuleSplit();
 
-  // 가로형은 두 모듈의 높이가 같아지므로, 입력창 맞춤을 자동 적용해 하단 빈 공간을 없앤다.
+  // 가로형은 배경의 크기를 바꾸지 않는다. 자유 입력창 모듈을 표와 같은
+  // 행 높이까지 늘리고, 그 안의 입력 카드만 남는 공간을 채우게 한다.
   const autoFitInHorizontal = state.orientation === 'H';
   if (autoFitInHorizontal) state.aModuleSizes.comment.fitContent = true;
   const enabled = Boolean(state.aModuleSizes.comment.fitContent) || autoFitInHorizontal;
@@ -766,6 +759,15 @@ function applyACommentContentFit() {
     content.querySelectorAll('.qa-card-item').forEach((card) => card.style.removeProperty('height'));
     content.querySelectorAll('textarea, .rich-text-editor').forEach(textarea => { textarea.style.height = ''; });
     return;
+  }
+
+  if (autoFitInHorizontal) {
+    // 과거의 카드 추가/리사이즈 값이 남아 있으면 align-self:flex-start와
+    // 고정 height 때문에 오른쪽 모듈이 표보다 짧아진다. 맞춤 시에는 이
+    // 모듈만 flex 행의 cross-axis stretch로 되돌린다. 캔버스 높이는 건드리지 않는다.
+    state.aModuleSizes.comment.height = null;
+    module.style.removeProperty('height');
+    module.style.removeProperty('align-self');
   }
 
   const scale = Number.isFinite(state.aModuleSizes.comment.scale)
@@ -803,28 +805,11 @@ function setupACommentAutoFitObserver() {
   observer.observe(container);
 }
 
-// 고정 크기가 설정된 자유 입력창은 실제 카드 높이까지만 차지하게 해 하단의
-// 불필요한 빈 공간을 없앤다. 사용자가 다시 모서리를 드래그하면 그 크기가 새 기준이 된다.
+// 입력창 맞춤은 모듈을 콘텐츠 높이로 다시 줄이지 않는다. 모듈의 사용자가
+// 정한 크기(또는 가로형의 같은 행 높이)를 유지하고, 내부 입력창이 빈 공간을 채운다.
 function trimACommentModuleBlankSpace() {
-  const module = document.getElementById('mod-comment');
-  const content = module?.querySelector('.a-module-content-scale');
-  const size = state.aModuleSizes.comment;
-  if (!module || !content || !Number.isFinite(size.height) || module.classList.contains('is-resizing')) return;
-  // 배경 맞춤 중에는 모듈이 콘텐츠를 따라 다시 커지면 안 된다.
-  if (module.closest('.card-canvas')?.classList.contains('module-fit-locked')) return;
-
-  const dragBarHeight = module.querySelector('.module-drag-bar')?.offsetHeight ?? 0;
-  const contentHeight = content.getBoundingClientRect().height;
-  if (!contentHeight) return;
-
-  const desiredHeight = Math.max(
-    A_MODULE_SIZE_LIMITS.comment.minHeight,
-    Math.ceil(24 + dragBarHeight + 10 + contentHeight)
-  );
-  if (Math.abs(desiredHeight - size.height) > 1) {
-    size.height = desiredHeight;
-    module.style.height = `${desiredHeight}px`;
-  }
+  // Backward-compatible no-op: older event hooks can continue to call this
+  // function without collapsing a manually sized module.
 }
 
 // 크기가 고정된 자유 입력창에 새 카드를 더할 때 기존 입력창을 압축하지 않고,
@@ -833,8 +818,9 @@ function growACommentModuleForNewCard(currentTextareaHeight = 65) {
   const module = document.getElementById('mod-comment');
   const size = state.aModuleSizes.comment;
   if (!module) return;
-  // 고정 배경 안에서는 새 입력창을 추가해도 카드 배경을 키우지 않고 내부 영역에 맞춘다.
-  if (module.closest('.card-canvas')?.classList.contains('module-fit-locked')) {
+  // 맞춤 상태에서는 기존 모듈 영역을 유지한다. 새 카드는 flex로 남는 공간을
+  // 함께 나눠 가지므로 모듈·버튼이 겹치지 않는다.
+  if (state.aModuleSizes.comment.fitContent || state.orientation === 'H') {
     applyACommentContentFit();
     return;
   }
@@ -886,70 +872,8 @@ function setupModuleSizeReset() {
       module.style.alignSelf = '';
       applyAModuleContentScale(module, 1);
     });
-    document.getElementById('export-card')?.classList.remove('module-fit-locked');
-    document.getElementById('export-card')?.style.removeProperty('height');
     applyOrientation(state.orientation);
     applyACommentContentFit();
-  });
-}
-
-// 수동 리사이즈한 뒤에도 각 A 모듈이 카드 배경 안에서 끝나도록 일괄 보정한다.
-function getBackgroundFitHeight(card) {
-  // 콘텐츠의 실제 높이는 모듈 크기에 따라 달라지므로 배경 맞춤 기준으로 쓰지 않는다.
-  // CSS에 정의한 카드 배경의 고정 기준 높이만 사용한다.
-  const configuredHeight = Number.parseFloat(
-    window.getComputedStyle(card).getPropertyValue('--background-fit-height')
-  );
-  return Number.isFinite(configuredHeight) && configuredHeight > 0 ? configuredHeight : 580;
-}
-
-function fitAModulesToBackground(card) {
-  const backgroundHeight = getBackgroundFitHeight(card);
-  card.style.height = `${backgroundHeight}px`;
-  card.classList.add('module-fit-locked');
-
-  window.requestAnimationFrame(() => {
-    const isHorizontal = state.orientation === 'H';
-    const commentReserve = isHorizontal ? 0 : A_MODULE_SIZE_LIMITS.comment.minHeight + 16;
-
-    ['table', 'comment'].forEach((key) => {
-      const module = document.getElementById(key === 'table' ? 'mod-table' : 'mod-comment');
-      if (!module) return;
-
-      const cardRect = card.getBoundingClientRect();
-      const rect = module.getBoundingClientRect();
-      // 세로형에서는 표가 자유 입력창의 자리를 침범하지 않도록 미리 남겨 둔다.
-      const reservedBelow = key === 'table' ? commentReserve : 0;
-      const availableHeight = Math.floor(cardRect.bottom - rect.top - 14 - reservedBelow);
-      const targetHeight = Math.max(80, availableHeight);
-      const currentScale = Number.isFinite(state.aModuleSizes[key].scale)
-        ? state.aModuleSizes[key].scale
-        : 1;
-      const nextScale = Math.max(0.2, Math.min(currentScale, targetHeight / Math.max(rect.height, 1)));
-
-      state.aModuleSizes[key].height = targetHeight;
-      state.aModuleSizes[key].scale = nextScale;
-      module.style.height = `${targetHeight}px`;
-      module.style.flex = 'none';
-      module.style.alignSelf = 'flex-start';
-      applyAModuleContentScale(module, nextScale);
-    });
-
-    state.aModuleSizes.comment.fitContent = true;
-    syncAHorizontalModuleSplit();
-    applyACommentContentFit();
-    trimACommentModuleBlankSpace();
-  });
-}
-
-function setupModuleFitToCard() {
-  const button = document.getElementById('btn-fit-modules-to-card');
-  if (!button) return;
-
-  button.addEventListener('click', () => {
-    const card = document.getElementById('export-card');
-    if (!card) return;
-    fitAModulesToBackground(card);
   });
 }
 
@@ -973,7 +897,6 @@ function applyAModuleSizes() {
   });
   syncAHorizontalModuleSplit();
   applyACommentContentFit();
-  window.requestAnimationFrame(trimACommentModuleBlankSpace);
 }
 
 function setupTableFitToggle() {

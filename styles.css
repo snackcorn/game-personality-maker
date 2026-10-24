@@ -342,8 +342,6 @@ body.is-horizontal .toolbar-row {
    캔버스 컨테이너 & 레이어
    ========================================= */
 .card-canvas {
-  /* 모듈 크기와 독립적인 배경 기준 높이. 배경 맞춤은 이 값을 사용한다. */
-  --background-fit-height: 580px;
   width: 100%;
   max-width: 780px;
   /* 기본 캔버스는 콘텐츠를 자연스럽게 수용한다. 고정 배경 맞춤은 아래 전용 클래스에서만 적용한다. */
@@ -1522,6 +1520,10 @@ body.is-horizontal .toolbar-row {
   min-height: 65px;
   height: auto !important;
 }
+.layout-a-comment-wrap.is-content-fitted .qa-body textarea {
+  flex: 1 1 auto;
+  height: auto !important;
+}
 .layout-a-comment-wrap.is-content-fitted #btn-add-a-comment {
   grid-row: 2;
   margin: 0;
@@ -1916,12 +1918,6 @@ body.is-horizontal .action-footer {
   height: auto !important;
   overflow: visible !important;
 }
-.card-canvas.module-fit-locked {
-  /* 배경 맞춤은 카드 배경을 늘리지 않고, 내부 모듈만 기준 높이에 맞춘다. */
-  min-height: var(--background-fit-height);
-  overflow: hidden !important;
-}
-
 /* 휴대폰에서는 작업 도구와 캔버스를 화면 폭 안에서 우선 배치한다. */
 @media (max-width: 700px) {
   body { padding: 14px 10px 20px; }
